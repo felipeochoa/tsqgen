@@ -1,0 +1,28 @@
+{
+  "name": "tsqgen",
+  "version": "0.0.1",
+  "description": "Safe and idiomatic SQL generation in TypeScript",
+  "scripts": {
+    "test": "jest",
+    "tsc": "tsc"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/felipeochoa/tsqgen.git"
+  },
+  "keywords": [
+    "sql",
+    "typescript"
+  ],
+  "author": "Felipe Ochoa",
+  "license": "Apache-2.0",
+  "bugs": {
+    "url": "https://github.com/felipeochoa/tsqgen/issues"
+  },
+  "homepage": "https://github.com/felipeochoa/tsqgen#readme",
+  "devDependencies": {
+    "@types/node": "^22.10.2",
+    "eslint": "^9.17.0",
+    "typescript": "^5.7.2"
+  }
+}
