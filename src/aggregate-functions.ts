@@ -124,8 +124,8 @@ export const jsonbAggStrict = define<[unknown], Jsonb>('jsonb_agg_strict');
  * corresponding delimiter (if it's not null).
  */
 export const stringAgg
-    : <T extends Buffer | string>(value: Expression<T>, delimiter: Expression<T>) => Expression<T>
-    = define<[value: Buffer | string, delimiter: Buffer | string], Buffer | string>('string_agg');
+    = <T extends Buffer | string>(value: Expression<T>, delimiter: Expression<T>): Expression<T> =>
+        new Aggregate<T>('string_agg', [value, delimiter]);
 
 /** Computes the sum of the non-null input values. */
 export const sum = define<[number], number>('sum');

@@ -1,5 +1,8 @@
 import { Expression, OrderArg } from './expression';
-import { Result } from './serialize';
+import { Token } from './serialize';
+
+export type Tuple<RowType> = {[Field in keyof RowType]: Expression<RowType[Field]>};
+export type TupleMap<T> = {[Table in keyof T]: Tuple<T[Table]>};
 
 type BoolExpr = Expression<boolean>;
 type UnknownExpr = Expression<unknown>;
@@ -8,25 +11,28 @@ type Nullable1<T> = {[K in keyof T]: T[K] | null};
 export type Nullable<T> = {[K in keyof T]: Nullable1<T[K]>};
 
 export interface From<T> {
-    join<T2>(other: From<T2>, on: (t: T & T2) => BoolExpr):                                From<T & T2>;
-    lateral<T2>(other: (t: T) => From<T2>, on: (t: T & T2) => BoolExpr):                   From<T & T2>;
-    leftJoin<T2>(other: From<T2>, on: (t: T & Nullable<T2>) => BoolExpr):                  From<T & Nullable<T2>>;
-    leftJoinLateral<T2>(other: (t: T) => From<T2>, on: (t: T & Nullable<T2>) => BoolExpr): From<T & Nullable<T2>>;
-    rightJoin<T2>(other: From<T2>, on: (t: Nullable<T> & T2) => BoolExpr):                 From<Nullable<T> & T2>;
-    fullJoin<T2>(other: From<T2>, on: (t: Nullable<T & T2>) => BoolExpr):                  From<Nullable<T & T2>>;
+    join<T2>(other: From<T2>, on: (t: TupleMap<T & T2>) => BoolExpr):                      From<T & T2>;
+    lateral<T2>(other: (t: TupleMap<T>) => From<T2>, on: (t: TupleMap<T & T2>) => BoolExpr): From<T & T2>;
+    leftJoin<T2>(other: From<T2>, on: (t: TupleMap<T & Nullable<T2>>) => BoolExpr):        From<T & Nullable<T2>>;
+    leftJoinLateral<T2>(
+        other: (t: TupleMap<T>) => From<T2>,
+        on: (t: TupleMap<T & Nullable<T2>>) => BoolExpr
+    ): From<T & Nullable<T2>>;
+    rightJoin<T2>(other: From<T2>, on: (t: TupleMap<Nullable<T> & T2>) => BoolExpr):       From<Nullable<T> & T2>;
+    fullJoin<T2>(other: From<T2>, on: (t: TupleMap<Nullable<T & T2>>) => BoolExpr):        From<Nullable<T & T2>>;
     crossJoin<T2>(other: From<T2>):                                                        From<T & T2>;
-    crossJoinLateral<T2>(other: (t: T) => From<T2>):                                       From<T & T2>;
-    select<SelectTuple>(proj: (t: T) => SelectTuple): SelectFrom<T, SelectTuple>;
-    serialize(): Result<string>;
+    crossJoinLateral<T2>(other: (t: TupleMap<T>) => From<T2>):                             From<T & T2>;
+    select<SelectTuple>(proj: (t: TupleMap<T>) => Tuple<SelectTuple>): SelectFrom<T, SelectTuple>;
+    serialize(): Token[];
 }
 
 export type SelectFrom<FromTuple, SelectTuple> = DistinctSubq<FromTuple, SelectTuple, true> & {
     distinct(): DistinctSubq<FromTuple, SelectTuple, false>;
-    distinctOn(key: ((t: FromTuple) => UnknownExpr[])): DistinctSubq<FromTuple, SelectTuple, false>;
+    distinctOn(key: ((t: TupleMap<FromTuple>) => UnknownExpr[])): DistinctSubq<FromTuple, SelectTuple, false>;
 };
 
 type DistinctSubq<FromTuple, SelectTuple, AllowLock> = FilteredSubq<FromTuple, SelectTuple, AllowLock> & {
-    where(cond: (t: FromTuple) => BoolExpr): FilteredSubq<FromTuple, SelectTuple, AllowLock>;
+    where(cond: (t: TupleMap<FromTuple>) => BoolExpr): FilteredSubq<FromTuple, SelectTuple, AllowLock>;
 };
 
 // https://www.postgresql.org/docs/current/queries-table-expressions.html#QUERIES-GROUPING-SETS
@@ -39,15 +45,15 @@ export type GroupingTree =
 export type RollupArgs = Array<UnknownExpr | UnknownExpr[]>;
 
 type FilteredSubq<FromTuple, SelectTuple, AllowLock> = GroupedSubq<FromTuple, SelectTuple, AllowLock> & {
-    groupBy(dims: (t: FromTuple) => GroupingTree):         GroupedSubq<FromTuple, SelectTuple, false>;
-    groupByDistinct(dims: (t: FromTuple) => GroupingTree): GroupedSubq<FromTuple, SelectTuple, false>;
-    rollup(dims: (t: FromTuple) => RollupArgs):            GroupedSubq<FromTuple, SelectTuple, false>;
-    cube(dims: (t: FromTuple) => RollupArgs):              GroupedSubq<FromTuple, SelectTuple, false>;
-    groupingSets(sets: (t: FromTuple) => UnknownExpr[][]): GroupedSubq<FromTuple, SelectTuple, false>;
+    groupBy(dims: (t: TupleMap<FromTuple>) => GroupingTree):         GroupedSubq<FromTuple, SelectTuple, false>;
+    groupByDistinct(dims: (t: TupleMap<FromTuple>) => GroupingTree): GroupedSubq<FromTuple, SelectTuple, false>;
+    rollup(dims: (t: TupleMap<FromTuple>) => RollupArgs):            GroupedSubq<FromTuple, SelectTuple, false>;
+    cube(dims: (t: TupleMap<FromTuple>) => RollupArgs):              GroupedSubq<FromTuple, SelectTuple, false>;
+    groupingSets(sets: (t: TupleMap<FromTuple>) => UnknownExpr[][]): GroupedSubq<FromTuple, SelectTuple, false>;
 };
 
 type GroupedSubq<FromTuple, SelectTuple, AllowLock> = GroupedFilteredSubq<FromTuple, SelectTuple, AllowLock> & {
-    having(cond: (t: FromTuple) => BoolExpr): GroupedFilteredSubq<FromTuple, SelectTuple, false>;
+    having(cond: (t: TupleMap<FromTuple>) => BoolExpr): GroupedFilteredSubq<FromTuple, SelectTuple, false>;
 };
 
 type GroupedFilteredSubq<FromTuple, SelectTuple, AllowLock> = UnitSubq<FromTuple, SelectTuple, AllowLock> & {
@@ -95,7 +101,7 @@ export type UnitSubq<FromTuple, SelectTuple, AllowLock> = OrderableSubq<FromTupl
 type OrderableSubq<FromTuple, SelectTuple, AllowLock> = OrderedSubq<SelectTuple, AllowLock> & {
     // A limitation of this feature is that an ORDER BY clause applying to the result of a UNION, INTERSECT, or
     // EXCEPT clause can only specify an output column name or number, not an expression.
-    orderBy(order: (t: FromTuple) => (UnknownExpr | OrderArg)[]): OrderedSubq<SelectTuple, AllowLock>;
+    orderBy(order: (t: TupleMap<FromTuple>) => (UnknownExpr | OrderArg)[]): OrderedSubq<SelectTuple, AllowLock>;
 };
 
 // Postgres uses OFFSET/LIMIT, but also supports SQL:2008's OFFSET/FETCH. With OFFSET/LIMIT, the clauses can be in
@@ -132,5 +138,5 @@ type LockableSubq<SelectTuple, AllowLock> = Subquery<SelectTuple> & (AllowLock e
 export interface Subquery<SelectTuple> {
     as<K extends string>(alias: K): From<Record<K, SelectTuple>>;
     scalar(): Expression<SelectTuple[keyof SelectTuple]>;
-    serialize(): Result<string>;
+    serialize(): Token[];
 }

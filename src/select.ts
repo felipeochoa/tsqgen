@@ -1,19 +1,12 @@
 import { constant, field, isExpression, Expression, OrderArg, SubqueryExpr } from './expression';
 import * as quote from './quote';
 import {
-    FrameRef, From, GroupingTree, Nullable, RollupArgs, SelectFrom, Subquery, UnitSubq, WindowFrame, WindowParams,
+    FrameRef, From, GroupingTree, Nullable, RollupArgs, SelectFrom, Subquery, Tuple, TupleMap, UnitSubq,
+    WindowFrame, WindowParams,
 } from './select-types';
-import { collectParams, Result, Serializable } from './serialize';
+import { commaSeparate, keyWord, literal, identifier, specialCharacter, Token } from './serialize';
 import { SQL } from './types';
 
-/*
- TODO
- - with queries
- - natural join
- - join USING
- - column aliases in from_item
- - TABLESAMPLE
- */
 // https://www.postgresql.org/docs/current/sql-select.html
 
 type BoolExpr = Expression<boolean>;
@@ -40,28 +33,28 @@ function subTuple<T>(tableName: string): T {
 }
 
 abstract class BaseFrom<T> implements From<T> {
-    private tuples: T = tupleMap();
+    private tuples: TupleMap<T> = tupleMap();
 
-    join<T2>(other: From<T2>, on: (t: T & T2) => BoolExpr): From<T & T2> {
+    join<T2>(other: From<T2>, on: (t: TupleMap<T & T2>) => BoolExpr): From<T & T2> {
         return new InnerJoin(this, other, on(tupleMap()), false);
     }
 
-    lateral<T2>(otherFn: (t: T) => From<T2>, on: (t: T & T2) => BoolExpr): From<T & T2> {
+    lateral<T2>(otherFn: (t: TupleMap<T>) => From<T2>, on: (t: TupleMap<T & T2>) => BoolExpr): From<T & T2> {
         const other = otherFn(this.tuples);
         return new InnerJoin(this, other, on(tupleMap()), true);
     }
 
-    leftJoin<T2>(other: From<T2>, on: (t: T & Nullable<T2>) => BoolExpr): From<T & Nullable<T2>> {
+    leftJoin<T2>(other: From<T2>, on: (t: TupleMap<T & Nullable<T2>>) => BoolExpr): From<T & Nullable<T2>> {
         return new LeftJoin(this, other, on(tupleMap()), false);
     }
 
-    leftJoinLateral<T2>(otherFn: (t: T) => From<T2>, on: (t: T & Nullable<T2>) => BoolExpr):
+    leftJoinLateral<T2>(otherFn: (t: TupleMap<T>) => From<T2>, on: (t: TupleMap<T & Nullable<T2>>) => BoolExpr):
     From<T & Nullable<T2>> {
         const other = otherFn(this.tuples);
         return new LeftJoin(this, other, on(tupleMap()), true);
     }
 
-    rightJoin<T2>(other: From<T2>, on: (t: Nullable<T> & T2) => BoolExpr): From<Nullable<T> & T2> {
+    rightJoin<T2>(other: From<T2>, on: (t: TupleMap<Nullable<T> & T2>) => BoolExpr): From<Nullable<T> & T2> {
         return new RightJoin(this, other, on(tupleMap()));
     }
 
@@ -69,29 +62,39 @@ abstract class BaseFrom<T> implements From<T> {
         return new CrossJoin(this, other, false);
     }
 
-    crossJoinLateral<T2>(otherFn: (t: T) => From<T2>): From<T & T2> {
+    crossJoinLateral<T2>(otherFn: (t: TupleMap<T>) => From<T2>): From<T & T2> {
         const other = otherFn(this.tuples);
         return new CrossJoin(this, other, true);
     }
 
-    fullJoin<T2>(other: From<T2>, on: (t: Nullable<T & T2>) => BoolExpr): From<Nullable<T & T2>> {
+    fullJoin<T2>(other: From<T2>, on: (t: TupleMap<Nullable<T & T2>>) => BoolExpr): From<Nullable<T & T2>> {
         return new FullJoin(this, other, on(tupleMap()));
     }
 
-    select<SelectTuple>(proj: (t: T) => SelectTuple): SelectFrom<T, SelectTuple> {
+    select<SelectTuple>(proj: (t: TupleMap<T>) => Tuple<SelectTuple>): SelectFrom<T, SelectTuple> {
         return SubqueryImpl.make(this, proj(tupleMap()));
     }
 
-    abstract serialize(): Result<string>;
+    abstract serialize(): Token[];
 }
 
 function serializeJoin<T1, T2>(type: 'INNER' | 'LEFT' | 'RIGHT' | 'FULL', lateral: boolean,
-                               left: From<T1>, right: From<T2>, on: BoolExpr): Result<string> {
-    const [leftStr, params] = left.serialize();
-    const lateralStr = lateral ? ' LATERAL' : '';
-    const rightStr = collectParams(right.serialize(), params);
-    const onStr = collectParams(on.serialize(), params);
-    return [`(${leftStr} ${type} JOIN${lateralStr} ${rightStr} ON ${onStr})`, params];
+                               left: From<T1>, right: From<T2>, on: BoolExpr): Token[] {
+    const leftTokens = left.serialize();
+    const lateralTokens = lateral ? [keyWord('LATERAL')] : [];
+    const rightTokens = right.serialize();
+    const onTokens = on.serialize();
+    return [
+        specialCharacter('('),
+        ...leftTokens,
+        keyWord(type),
+        keyWord('JOIN'),
+        ...lateralTokens,
+        ...rightTokens,
+        keyWord('ON'),
+        ...onTokens,
+        specialCharacter(')')
+    ];
 }
 
 class InnerJoin<T1, T2> extends BaseFrom<T1 & T2> {
@@ -100,7 +103,7 @@ class InnerJoin<T1, T2> extends BaseFrom<T1 & T2> {
         super();
     }
 
-    serialize(): Result<string> {
+    serialize(): Token[] {
         return serializeJoin('INNER', this.isLateral, this.left, this.right, this.on);
     }
 }
@@ -111,7 +114,7 @@ class LeftJoin<T1, T2> extends BaseFrom<T1 & Nullable<T2>> {
         super();
     }
 
-    serialize(): Result<string> {
+    serialize(): Token[] {
         return serializeJoin('LEFT', this.isLateral, this.left, this.right, this.on);
     }
 }
@@ -121,7 +124,7 @@ class RightJoin<T1, T2> extends BaseFrom<Nullable<T1> & T2> {
         super();
     }
 
-    serialize(): Result<string> {
+    serialize(): Token[] {
         return serializeJoin('RIGHT', false, this.left, this.right, this.on);
     }
 }
@@ -131,7 +134,7 @@ class FullJoin<T1, T2> extends BaseFrom<Nullable<T1 & T2>> {
         super();
     }
 
-    serialize(): Result<string> {
+    serialize(): Token[] {
         return serializeJoin('FULL', false, this.left, this.right, this.on);
     }
 }
@@ -141,23 +144,26 @@ class CrossJoin<T1, T2> extends BaseFrom<T1 & T2> {
         super();
     }
 
-    serialize(): Result<string> {
-        const [leftStr, params] = this.left.serialize();
-        const rightStr = collectParams(this.right.serialize(), params);
-        if (this.isLateral) {
-            return [`(${leftStr} CROSS JOIN LATERAL ${rightStr})`, params];
-        }
-        return [`(${leftStr} CROSS JOIN ${rightStr})`, params];
+    serialize(): Token[] {
+        const left = this.left.serialize();
+        const rightTokens = this.right.serialize();
+        const lateral = this.isLateral ? [keyWord('LATERAL')] : [];
+        return [
+            specialCharacter('('),
+            ...left,
+            keyWord('CROSS JOIN'),
+            ...lateral,
+            ...rightTokens,
+            specialCharacter(')')
+        ];
     }
 }
-
-type Tuple<RowType> = {[Field in keyof RowType]: Expression<RowType[Field]>};
 
 // We want to ensure that aliases are only set once per from_item. To do so, we use a "smart constructor" that
 // hides the alias parameter, which can only be set from the `.as()` method. In the .as() method we upcast the
 // result to hide that method from typescript
 
-class Table<Alias extends string, RowType> extends BaseFrom<Record<Alias, Tuple<RowType>>> {
+class Table<Alias extends string, RowType> extends BaseFrom<Record<Alias, RowType>> {
     protected constructor(private alias: Alias, private realName: string) {
         super();
     }
@@ -170,13 +176,17 @@ class Table<Alias extends string, RowType> extends BaseFrom<Record<Alias, Tuple<
         return new Table<Name, RowType>(name, name);
     }
 
-    as<NewAlias extends string>(alias: NewAlias): From<Record<NewAlias, Tuple<RowType>>> {
+    as<NewAlias extends string>(alias: NewAlias): From<Record<NewAlias, RowType>> {
         return new Table(alias, this.realName);
     }
 
-    serialize(): Result<string> {
-        if (this.realName === this.alias) return [quote.tableName(this.alias), []];
-        return [`${this.realName} AS ${this.alias}`, []];
+    serialize(): Token[] {
+        if (this.realName === this.alias) return [identifier(quote.tableName(this.alias))];
+        return [
+            identifier(this.realName),
+            keyWord('AS'),
+            identifier(this.alias)
+        ];
     }
 }
 
@@ -201,13 +211,19 @@ class FromFunction<Alias extends string, T> extends BaseFrom<Record<Alias, T>> {
         return new FromFunction(alias, this.args, this.ordinality, this.alias);
     }
 
-    serialize(): Result<string> {
-        const params: unknown[] = [];
-        const args = this.args.map(a => collectParams(a.serialize(), params)).join(', ');
-        const withOrdinality = this.ordinality ? ' WITH ORDINALITY' : '';
-        const name = quote.identifier(this.realName ?? this.alias);
-        const alias = this.realName === undefined ? '' : ' AS ' + quote.identifier(this.alias);
-        return [`${name}(${args})${withOrdinality}${alias}`, params];
+    serialize(): Token[] {
+        const args = commaSeparate(this.args.map(a => a.serialize()));
+        const withOrdinality = this.ordinality ? [keyWord('WITH ORDINALITY')] : [];
+        const name = identifier(quote.identifier(this.realName ?? this.alias));
+        const alias = this.realName === undefined ? [] : [keyWord('AS'), identifier(quote.identifier(this.alias))];
+        return [
+            name,
+            specialCharacter('('),
+            ...args,
+            specialCharacter(')'),
+            ...withOrdinality,
+            ...alias
+        ];
     }
 }
 
@@ -218,10 +234,16 @@ class FromSubquery<Alias extends string, T> extends BaseFrom<Record<Alias, T>> {
         super();
     }
 
-    serialize(): Result<string> {
-        const [subquery, params] = this.subquery.serialize();
-        const alias = quote.identifier(this.alias);
-        return [`(${subquery}) AS ${alias}`, params];
+    serialize(): Token[] {
+        const subquery = this.subquery.serialize();
+        const alias = identifier(quote.identifier(this.alias));
+        return [
+            specialCharacter('('),
+            ...subquery,
+            specialCharacter(')'),
+            keyWord('AS'),
+            alias
+        ];
     }
 }
 
@@ -245,7 +267,7 @@ interface SubqueryState<FromTuple, SelectTuple> {
     having?: BoolExpr;
     windows: WindowState[];
     setOps: Array<{
-        type: 'union' | 'intersect' | 'except',
+        type: 'UNION' | 'INTERSECT' | 'EXCEPT',
         all: boolean,
         query: UnitSubq<FromTuple, SelectTuple, any>,
     }>;
@@ -261,10 +283,10 @@ interface SubqueryState<FromTuple, SelectTuple> {
 }
 
 class SubqueryImpl<FromTuple, SelectTuple> {
-    protected constructor(private from: From<FromTuple>, private tuple: SelectTuple,
+    protected constructor(private from: From<FromTuple>, private tuple: Tuple<SelectTuple>,
                           private state: SubqueryState<FromTuple, SelectTuple>) {}
 
-    static make<FromTuple, SelectTuple>(from: From<FromTuple>, tuple: SelectTuple) {
+    static make<FromTuple, SelectTuple>(from: From<FromTuple>, tuple: Tuple<SelectTuple>) {
         const initState = {groupByDistinct: false, windows: [], setOps: [], locks: []};
         return new SubqueryImpl<FromTuple, SelectTuple>(from, tuple, initState);
     }
@@ -273,45 +295,45 @@ class SubqueryImpl<FromTuple, SelectTuple> {
         { return new SubqueryImpl(this.from, this.tuple, {...this.state, ...newState}); }
 
     distinct() { return this.update({distinct: {type: 'row'}}); }
-    distinctOn(key: ((t: FromTuple) => UnknownExpr[]))
+    distinctOn(key: ((t: TupleMap<FromTuple>) => UnknownExpr[]))
         { return this.update({distinct: {type: 'on', key: key(tupleMap())}}); }
 
-    where(cond: (t: FromTuple) => BoolExpr) { return this.update({where: cond(tupleMap())}); }
+    where(cond: (t: TupleMap<FromTuple>) => BoolExpr) { return this.update({where: cond(tupleMap())}); }
 
-    groupBy(dims: (t: FromTuple) => GroupingTree)
+    groupBy(dims: (t: TupleMap<FromTuple>) => GroupingTree)
         { return this.update({groupBy: dims(tupleMap()), groupByDistinct: false}); }
-    groupByDistinct(dims: (t: FromTuple) => GroupingTree)
+    groupByDistinct(dims: (t: TupleMap<FromTuple>) => GroupingTree)
         { return this.update({groupBy: dims(tupleMap()), groupByDistinct: true}); }
-    rollup(dims: (t: FromTuple) => RollupArgs)
+    rollup(dims: (t: TupleMap<FromTuple>) => RollupArgs)
         { return this.update({groupBy: rollup(dims(tupleMap())), groupByDistinct: false}); }
-    cube(dims: (t: FromTuple) => RollupArgs)
+    cube(dims: (t: TupleMap<FromTuple>) => RollupArgs)
         { return this.update({groupBy: cube(dims(tupleMap())), groupByDistinct: false}); }
-    groupingSets(sets: (t: FromTuple) => UnknownExpr[][])
+    groupingSets(sets: (t: TupleMap<FromTuple>) => UnknownExpr[][])
         { return this.update({groupBy: groupingSets(sets(tupleMap())), groupByDistinct: false}); }
 
-    having(cond: (t: FromTuple) => BoolExpr)
+    having(cond: (t: TupleMap<FromTuple>) => BoolExpr)
         { return this.update({having: cond(tupleMap())}); }
 
     window(name: string): WindowMaker<FromTuple, SubqueryImpl<FromTuple, SelectTuple>>
         { return new WindowMaker(name, w => this.update({windows: this.state.windows.concat(w)})); }
 
-    private addSetOp(type: 'union' | 'intersect' | 'except', all: boolean,
+    private addSetOp(type: 'UNION' | 'INTERSECT' | 'EXCEPT', all: boolean,
                      query: UnitSubq<FromTuple, SelectTuple, any>)
         { return this.update({setOps: this.state.setOps.concat({type, all, query})}); }
     union(other: UnitSubq<FromTuple, SelectTuple, any>)
-        { return this.addSetOp('union', false, other); }
+        { return this.addSetOp('UNION', false, other); }
     unionAll(other: UnitSubq<FromTuple, SelectTuple, any>)
-        { return this.addSetOp('union', true, other); }
+        { return this.addSetOp('UNION', true, other); }
     intersect(other: UnitSubq<FromTuple, SelectTuple, any>)
-        { return this.addSetOp('intersect', false, other); }
+        { return this.addSetOp('INTERSECT', false, other); }
     intersectAll(other: UnitSubq<FromTuple, SelectTuple, any>)
-        { return this.addSetOp('intersect', true, other); }
+        { return this.addSetOp('INTERSECT', true, other); }
     except(other: UnitSubq<FromTuple, SelectTuple, any>)
-        { return this.addSetOp('except', false, other); }
+        { return this.addSetOp('EXCEPT', false, other); }
     exceptAll(other: UnitSubq<FromTuple, SelectTuple, any>)
-        { return this.addSetOp('except', true, other); }
+        { return this.addSetOp('EXCEPT', true, other); }
 
-    orderBy(order: (t: FromTuple) => Array<UnknownExpr | OrderArg>)
+    orderBy(order: (t: TupleMap<FromTuple>) => Array<UnknownExpr | OrderArg>)
         { return this.update({orderBy: resolveOrderArgs(order(tupleMap()))}); }
 
     offset(offset: number | Expression<number>)
@@ -335,65 +357,64 @@ class SubqueryImpl<FromTuple, SelectTuple> {
     scalar(): Expression<SelectTuple[keyof SelectTuple]>
         { return new SubqueryExpr(this); }
 
-    serialize(): Result<string> {
+    serialize(): Token[] {
         const {state} = this;
-        const params: unknown[] = [];
-        const s = (x: Serializable) => collectParams(x.serialize(), params);
-        const fields = Object.entries(this.tuple);
+        const fields = Object.entries<Expression<unknown>>(this.tuple);
 
-        const parts = ['SELECT'];
+        const parts: Token[] = [keyWord('SELECT')];
         if (state.distinct)
-            parts.push(...collectParams(serializeDistinct(state.distinct), params));
-        if (fields.length === 0) parts.push('*');
-        else commaSeparate(parts, fields.map(f => serializeField(f)));
+            parts.push(...serializeDistinct(state.distinct));
+        if (fields.length === 0) parts.push(specialCharacter('*'));
+        else parts.push(...commaSeparate(fields.map(([name, expr]) => [
+            ...expr.serialize(),
+            keyWord('AS'),
+            identifier(quote.identifier(name))
+        ])));
 
-        parts.push('FROM', collectParams(this.from.serialize(), params));
+        parts.push(keyWord('FROM'), ...this.from.serialize());
 
-        if (state.where) parts.push('WHERE', s(state.where));
-        if (state.groupBy) {
-            parts.push(...collectParams(serializeGroupBy(state.groupBy, state.groupByDistinct), params));
-        }
-        if (state.having) parts.push('HAVING', s(state.having));
+        if (state.where) parts.push(keyWord('WHERE'), ...state.where.serialize());
+        if (state.groupBy) parts.push(...serializeGroupBy(state.groupBy, state.groupByDistinct));
+        if (state.having) parts.push(keyWord('HAVING'), ...state.having.serialize());
         if (state.windows.length > 0) {
-            parts.push('WINDOW');
-            commaSeparate(parts, state.windows.map(w => collectParams(serializeWindow(w), params)));
+            parts.push(keyWord('WINDOW'));
+            parts.push(...commaSeparate(state.windows.map(w => serializeWindow(w))));
         }
         for (const {type, all, query} of state.setOps) {
-            parts.push(type.toUpperCase());
-            if (all) parts.push('ALL');
-            parts.push(s(query));
+            parts.push(keyWord(type));
+            if (all) parts.push(keyWord('ALL'));
+            parts.push(...query.serialize());
         }
         if (state.orderBy) {
-            parts.push('ORDER BY');
-            commaSeparate(parts, state.orderBy.map(arg => collectParams(serializeOrderArg(arg), params)));
+            parts.push(keyWord('ORDER BY'));
+            parts.push(...commaSeparate(state.orderBy.map(arg => serializeOrderArg(arg))));
         }
-        parts.push(...collectParams(this.serializeLimits(), params));
+        parts.push(...this.serializeLimits());
         for (const {strength, block, tables} of this.state.locks) {
-            parts.push('FOR', strength);
-            if (tables !== undefined) parts.push('OF', ...tables.map(quote.tableName));
-            if (block !== undefined) parts.push(block);
+            parts.push(keyWord('FOR'), keyWord(strength));
+            if (tables !== undefined) parts.push(keyWord('OF'), ...tables.map(quote.tableName).map(identifier));
+            if (block !== undefined) parts.push(keyWord(block));
         }
-        return [parts.join(' '), params];
+        return parts;
     }
 
-    private serializeLimits(): Result<string[]> {
-        const params: unknown[] = [];
-        const ret: string[] = [];
+    private serializeLimits(): Token[] {
+        const ret: Token[] = [];
         const {offset, limit, fetch} = this.state;
         if (fetch) {
             if (offset === undefined) throw new Error('Recieved FETCH without OFFSET');
-            ret.push('OFFSET', collectParams(offset.serialize(), params), 'ROWS');
-            ret.push('FETCH NEXT', collectParams(fetch.fetch.serialize(), params), 'ROWS');
-            ret.push(fetch.withTies ? 'WITH TIES' : 'ONLY');
-            return [ret, params];
+            ret.push(keyWord('OFFSET'), ...offset.serialize(), keyWord('ROWS'));
+            ret.push(keyWord('FETCH NEXT'), ...fetch.fetch.serialize(), keyWord('ROWS'));
+            ret.push(keyWord(fetch.withTies ? 'WITH TIES' : 'ONLY'));
+            return ret;
         }
         if (limit) {
-            ret.push('LIMIT', limit === 'ALL' ? limit : collectParams(limit.serialize(), params));
+            ret.push(keyWord('LIMIT'), ...(limit === 'ALL' ? [keyWord(limit)] : limit.serialize()));
         }
         if (offset) {
-            ret.push('OFFSET', collectParams(offset.serialize(), params));
+            ret.push(keyWord('OFFSET'), ...offset.serialize());
         }
-        return [ret, params];
+        return ret;
     }
 }
 
@@ -417,86 +438,74 @@ function resolveOrderArgs(args: Array<UnknownExpr | OrderArg>): OrderArg[] {
     return args.map(arg => isExpression(arg) ? {expr: arg} : arg);
 }
 
-function serializeDistinct(distinct: Distinct): Result<string[]> {
-    const ret: string[] = ['DISTINCT'];
-    const params: unknown[] = [];
+function serializeDistinct(distinct: Distinct): Token[] {
+    const ret: Token[] = [keyWord('DISTINCT')];
     switch (distinct.type) {
-        case 'row': return [ret, params];
+        case 'row': return ret;
         case 'on': {
-            ret.push('ON');
-            commaSeparate(ret, distinct.key.map(k => [collectParams(k.serialize(), params)]));
-            return [ret, params];
+            ret.push(keyWord('ON'));
+            ret.push(...commaSeparate(distinct.key.map(k => k.serialize())));
+            return ret;
         }
         default: assertNever(distinct, 'Invalid distinct type received ' + (distinct as any)?.type);
     }
 }
 
-function serializeGroupBy(groupBy: GroupingTree, distinct: boolean): Result<string[]> {
-    const ret = ['GROUP BY'];
-    const params: unknown[] = [];
-    if (distinct) ret.push('DISTINCT');
+function serializeGroupBy(groupBy: GroupingTree, distinct: boolean): Token[] {
+    const ret: Token[] = [keyWord('GROUP BY')];
+    if (distinct) ret.push(keyWord('DISTINCT'));
     go(groupBy, 0);
-    return [ret, params];
+    return ret;
 
     function go(tree: GroupingTree, ixInParent: number) {
-        if (ixInParent > 0) ret.push(',');
-        if (isExpression(tree)) return ret.push(collectParams(tree.serialize(), params));
+        if (ixInParent > 0) ret.push(specialCharacter(','));
+        if (isExpression(tree)) return ret.push(...tree.serialize());
         if (Array.isArray(tree)) return tree.forEach(go);
-        ret.push(tree.type, '(');
+        ret.push(keyWord(tree.type), specialCharacter('('));
         tree.args.forEach(go);
-        ret.push(')');
+        ret.push(specialCharacter(')'));
     }
 }
 
-function serializeWindow(window: WindowState): Result<string[]> {
-    const ret: string[] = [window.name, 'AS', '('];
-    const params: unknown[] = [];
+function serializeWindow(window: WindowState): Token[] {
+    const ret: Token[] = [identifier(window.name), keyWord('AS'), specialCharacter('(')];
     if (window.type === 'fresh') {
-        ret.push('PARTITION BY');
+        ret.push(keyWord('PARTITION BY'));
         window.partitionBy.forEach((e, i) => {
-            i > 0 && ret.push(', ');
-            ret.push(collectParams(e.serialize(), params));
+            i > 0 && ret.push(specialCharacter(','));
+            ret.push(...e.serialize());
         });
     } else {
-        ret.push(window.existingWindowName);
+        ret.push(identifier(window.existingWindowName));
     }
     if (window.orderBy)
-        window.orderBy.forEach(a => ret.push(...collectParams(serializeOrderArg(a), params)));
+        window.orderBy.forEach(a => ret.push(...serializeOrderArg(a)));
     if (window.frame) {
-        ret.push(window.frame.type);
-        if (window.frame.end !== undefined) ret.push('BETWEEN');
+        ret.push(keyWord(window.frame.type));
+        if (window.frame.end !== undefined) ret.push(keyWord('BETWEEN'));
         serializeFrameRef(window.frame.start);
         if (window.frame.end !== undefined) {
-            ret.push('AND');
+            ret.push(keyWord('AND'));
             serializeFrameRef(window.frame.end);
         }
-        if (window.frame.exclusion) ret.push(window.frame.exclusion);
+        if (window.frame.exclusion) ret.push(keyWord(window.frame.exclusion));
     }
-    ret.push(')');
-    return [ret, params];
+    ret.push(specialCharacter(')'));
+    return ret;
 
     function serializeFrameRef(ref: FrameRef) {
         if (ref.type === 'PRECEDING' || ref.type === 'FOLLOWING')
-            ret.push(ref.offset.toString());
-        ret.push(ref.type);
+            ret.push(literal(ref.offset.toString()));
+        ret.push(keyWord(ref.type));
     }
 }
 
-function serializeOrderArg(arg: OrderArg): Result<string[]> {
-    const [expr, params] = arg.expr.serialize();
-    const ret = [expr];
-    if (arg.order?.key === 'USING') ret.push('USING', arg.order.op);
-    else if (arg.order) ret.push(arg.order.key);
-    if (arg.nulls) ret.push(arg.nulls);
-    return [ret, params];
-}
-
-function commaSeparate(into: string[], args: readonly string[][]) {
-    if (args.length === 0) return;
-    into.push(...args[0]);
-    for (let i = 1; i < args.length; i++) {
-        into.push(',', ...args[i]);
-    }
+function serializeOrderArg(arg: OrderArg): Token[] {
+    const ret: Token[] = [...arg.expr.serialize()];
+    if (arg.order?.key === 'USING') ret.push(keyWord('USING'), identifier(arg.order.op));
+    else if (arg.order) ret.push(keyWord(arg.order.key));
+    if (arg.nulls) ret.push(keyWord(arg.nulls));
+    return ret;
 }
 
 function assertNever(_: never, msg: string): never { // Useful for Typescript exhaustiveness checks

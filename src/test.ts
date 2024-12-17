@@ -2,15 +2,7 @@ import { table } from './select';
 import { $, agg, not } from './expression';
 import * as sql from './types';
 
-const posts = table<'posts', {
-    id: sql.Uuid;
-    name: string;
-    last_mod_time: Date;
-    last_mod_author: sql.Uuid;
-    word_count: number;
-    phase: string;
-    deleted: boolean;
-}>('posts', {
+const posts = table('posts', {
     id: sql.uuid.notNull(),
     name: sql.text.notNull(),
     last_mod_time: sql.timestampWithTimeZone.notNull(),
@@ -20,11 +12,7 @@ const posts = table<'posts', {
     deleted: sql.boolean.notNull(),
 });
 
-const userPost = table<'user_post', {
-    user_id: sql.Uuid;
-    post_id: sql.Uuid;
-    active: boolean;
-}>('user_post', {
+const userPost = table('user_post', {
     user_id: sql.uuid.notNull(),
     post_id: sql.uuid.notNull(),
     active: sql.boolean.notNull(),

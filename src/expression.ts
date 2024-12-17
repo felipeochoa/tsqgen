@@ -1,5 +1,5 @@
 import * as quote from './quote';
-import { collectParams, Result, Serializable } from './serialize';
+import { commaSeparate, Serializable, Token, keyWord, identifier, literal, operator, specialCharacter } from './serialize';
 import { Subquery } from './select-types';
 import { SQL } from './types';
 
@@ -43,7 +43,7 @@ export interface Expression<T> {
     desc(nulls?: 'NULLS FIRST' | 'NULLS LAST'): OrderArg;
     using(op: string, nulls?: 'NULLS FIRST' | 'NULLS LAST'): OrderArg;
 
-    serialize(): Result<string>;
+    serialize(): Token[];
 }
 
 export const isExpression = <T, O extends object>(x: Expression<T> | O):
@@ -109,7 +109,7 @@ abstract class BaseExpr<T> implements Expression<T> {
     using(op: string, nulls?: 'NULLS FIRST' | 'NULLS LAST'): OrderArg
         { return {expr: this, order: {key: 'USING', op}, nulls}; }
 
-    abstract serialize(): Result<string>;
+    abstract serialize(): Token[];
 }
 
 export class SubqueryExpr<Value> extends BaseExpr<Value> {
@@ -117,9 +117,12 @@ export class SubqueryExpr<Value> extends BaseExpr<Value> {
         super();
     }
 
-    serialize(): Result<string> {
-        const [subquery, params] = this.subquery.serialize();
-        return [`(${subquery})`, params];
+    serialize(): Token[] {
+        return [
+            specialCharacter('('),
+            ...this.subquery.serialize(),
+            specialCharacter(')')
+        ];
     }
 }
 
@@ -128,8 +131,8 @@ class Constant<T> extends BaseExpr<T> {
         super();
     }
 
-    serialize(): Result<string> {
-        return [quote.literal(this.value), []];
+    serialize(): Token[] {
+        return [literal(quote.literal(this.value))];
     }
 }
 
@@ -144,8 +147,8 @@ class Identifier<T> extends BaseExpr<T> {
         super();
     }
 
-    serialize(): Result<string> {
-        return [quote.identifier(this.name), []];
+    serialize(): Token[] {
+        return [identifier(quote.identifier(this.name))];
     }
 }
 
@@ -154,9 +157,14 @@ class PrefixExpr<T> extends BaseExpr<T> {
         super();
     }
 
-    serialize(): Result<string> {
-        const [operand, params] = this.operand.serialize();
-        return [`(${this.op} ${operand})`, params];
+    serialize(): Token[] {
+        const operand = this.operand.serialize();
+        return [
+            specialCharacter('('),
+            operator(this.op),
+            ...operand,
+            specialCharacter(')')
+        ];
     }
 }
 
@@ -165,9 +173,14 @@ class PostfixExpr<T> extends BaseExpr<T> {
         super();
     }
 
-    serialize(): Result<string> {
-        const [operand, params] = this.operand.serialize();
-        return [`(${operand} ${this.op})`, params];
+    serialize(): Token[] {
+        const operand = this.operand.serialize();
+        return [
+            specialCharacter('('),
+            ...operand,
+            operator(this.op),
+            specialCharacter(')')
+        ];
     }
 }
 
@@ -176,10 +189,16 @@ class InfixExpr<T> extends BaseExpr<T> {
         super();
     }
 
-    serialize(): Result<string> {
-        const [left, params] = this.left.serialize();
-        const right = collectParams(this.right.serialize(), params);
-        return [`(${left} ${this.op} ${right})`, params];
+    serialize(): Token[] {
+        const left = this.left.serialize();
+        const right = this.right.serialize();
+        return [
+            specialCharacter('('),
+            ...left,
+            identifier(this.op),
+            ...right,
+            specialCharacter(')')
+        ];
     }
 }
 
@@ -189,10 +208,18 @@ class MultiOperandExpr<T> extends BaseExpr<T> {
         super();
     }
 
-    serialize(): Result<string> {
-        const [left, params] = this.left.serialize();
-        const right = this.right.map(e => collectParams(e.serialize(), params));
-        return [`(${left} ${this.op} (${right.join(', ')}))`, params];
+    serialize(): Token[] {
+        const left = this.left.serialize();
+        const right = this.right.map(e => e.serialize());
+        return [
+            specialCharacter('('),
+            ...left,
+            operator(this.op),
+            specialCharacter('('),
+            ...commaSeparate(right),
+            specialCharacter(')'),
+            specialCharacter(')')
+        ];
     }
 }
 
@@ -201,10 +228,15 @@ class FuncExpr<T> extends BaseExpr<T> {
         super();
     }
 
-    serialize(): Result<string> {
+    serialize(): Token[] {
         const fn = quote.identifier(this.functionName);
-        const [values, params] = serializeArgs(this.args);
-        return [`${fn}(${values.join(',')})`, params];
+        const values = this.args.map(arg => arg.serialize());
+        return [
+            identifier(fn),
+            specialCharacter('('),
+            ...commaSeparate(values),
+            specialCharacter(')')
+        ];
     }
 }
 
@@ -240,13 +272,21 @@ export class Aggregate<T> extends BaseExpr<T> {
     // be used as a window function... Aggregate functions act as window functions only when an OVER clause follows
     // the call https://www.postgresql.org/docs/current/functions-window.html
 
-    serialize(): Result<string> {
+    serialize(): Token[] {
         const fn = quote.identifier(this.functionName);
-        const [args, params] = serializeArgs(this.args);
-        const filter = collectParams(serializeFilterWhere(this.filter), params);
-        const distinct = this.doDistinct ? 'DISTINCT ' : '';
-        const orderBy = this.order ? ' ' + collectParams(serializeOrderBy(this.order), params) : '';
-        return [`${fn}(${distinct}${args.join(',') || '*'}${orderBy})${filter}`, params];
+        const args = serializeArgs(this.args);
+        const filter = serializeFilterWhere(this.filter);
+        const distinct = this.doDistinct ? [keyWord('DISTINCT')] : [];
+        const orderBy = this.order ? serializeOrderBy(this.order) : [];
+        return [
+            identifier(fn),
+            specialCharacter('('),
+            ...distinct,
+            ...commaSeparate(args),
+            ...orderBy,
+            specialCharacter(')'),
+            ...filter
+        ];
     }
 }
 
@@ -261,12 +301,22 @@ export class OrderedSetAggregate<T> extends BaseExpr<T> {
         return new OrderedSetAggregate(this.functionName, this.args, this.order, filter);
     }
 
-    serialize(): Result<string> {
+    serialize(): Token[] {
         const fn = quote.identifier(this.functionName);
-        const [args, params] = serializeArgs(this.args);
-        const filter = collectParams(serializeFilterWhere(this.filter), params);
+        const args = serializeArgs(this.args);
+        const filter = serializeFilterWhere(this.filter);
         const orderBy = serializeOrderBy(this.order);
-        return [`${fn}(${args.join(', ')}) WITHIN GROUP(${orderBy})${filter}`, params];
+        return [
+            identifier(fn),
+            specialCharacter('('),
+            ...commaSeparate(args),
+            specialCharacter(')'),
+            keyWord('WITHIN GROUP'),
+            specialCharacter('('),
+            ...orderBy,
+            specialCharacter(')'),
+            ...filter
+        ];
     }
 }
 
@@ -285,11 +335,19 @@ class WindowCall<T> extends BaseExpr<T> {
         super();
     }
 
-    serialize(): Result<string> {
+    serialize(): Token[] {
         const fn = quote.identifier(this.functionName);
-        const [args, params] = serializeArgs(this.args);
-        const filter = collectParams(serializeFilterWhere(this.filter), params);
-        return [`${fn}(${args.join(', ') || '*'})${filter} OVER ${this.over}`, params];
+        const args = serializeArgs(this.args);
+        const filter = serializeFilterWhere(this.filter);
+        return [
+            identifier(fn),
+            specialCharacter('('),
+            ...(args.length ? commaSeparate(args) : [specialCharacter('*')]),
+            specialCharacter(')'),
+            ...filter,
+            keyWord('OVER'),
+            identifier(this.over)
+        ];
     }
 }
 
@@ -310,9 +368,16 @@ class Cast<T> extends BaseExpr<T> {
         super();
     }
 
-    serialize(): Result<string> {
-        const [expr, params] = this.expression.serialize();
-        return [`CAST(${expr} AS ${this.toType})`, params];
+    serialize(): Token[] {
+        const expr = this.expression.serialize();
+        return [
+            keyWord('CAST'),
+            specialCharacter('('),
+            ...expr,
+            keyWord('AS'),
+            identifier(this.toType),
+            specialCharacter(')')
+        ];
     }
 }
 
@@ -321,9 +386,13 @@ class ArrayExpr<T> extends BaseExpr<T[]> {
         super();
     }
 
-    serialize(): Result<string> {
-        const [values, params] = serializeArgs(this.args);
-        return [`ARRAY[${values.join(',')}]`, params];
+    serialize(): Token[] {
+        return [
+            keyWord('ARRAY'),
+            specialCharacter('['),
+            ...commaSeparate(serializeArgs(this.args)),
+            specialCharacter(']'),
+        ];
     }
 }
 
@@ -345,8 +414,12 @@ class Field<T> extends BaseExpr<T> {
         super();
     }
 
-    serialize(): Result<string> {
-        return [quote.tableName(this.tableName) + quote.columnName(this.name), []];
+    serialize(): Token[] {
+        return [
+            identifier(quote.tableName(this.tableName)),
+            specialCharacter('.'),
+            identifier(quote.columnName(this.name))
+        ];
     }
 }
 
@@ -357,8 +430,8 @@ class ParameterExpr<T> extends BaseExpr<T> {
         super();
     }
 
-    serialize(): Result<string> {
-        return ['$' + this.index, []];
+    serialize(): Token[] {
+        return [literal('$' + this.index)];
     }
 }
 
@@ -372,28 +445,32 @@ export function $<T>(types: {[K in keyof T]: SQL<T[K]>}): Parameters<T> {
     return Object.assign(ret2, ret);
 }
 
-function serializeArgs(args: Serializable[]): Result<string[]> {
-    const params: unknown[] = [];
-    const values = args.map(arg => collectParams(arg.serialize(), params));
-    return [values, params];
+function serializeArgs(args: Serializable[]): Token[][] {
+    return args.map(arg => arg.serialize());
 }
 
-function serializeFilterWhere(expr: Expression<boolean> | undefined): Result<string> {
-    if (expr) {
-        const [f, params] = expr.serialize();
-        return [` FILTER(WHERE ${f})`, params];
-    }
-    return ['', []];
+function serializeFilterWhere(expr: Expression<boolean> | undefined): Token[] {
+    if (!expr) return [];
+    return [
+        keyWord('FILTER'),
+        specialCharacter('('),
+        keyWord('WHERE'),
+        ...expr.serialize(),
+        specialCharacter(')')
+    ];
 }
 
-function serializeOrderBy(args: OrderArg[]): Result<string> {
-    const [exprs, params] = serializeArgs(args.map(a => a.expr));
-    const ret = args.map(({order, nulls}, i) => (
-        exprs[i] + (order ? ' ' + serializeOrder(order) : '') + (nulls ? ' NULLS ' + nulls : '')
-    )).join(',');
-    return [ret, params];
+function serializeOrderBy(args: OrderArg[]): Token[] {
+    return commaSeparate(args.map(({expr, order, nulls}): Token[] => [
+        ...expr.serialize(),
+        ...(order ? serializeOrder(order) : []),
+        ...(nulls ? [keyWord('NULLS'), keyWord(nulls)] : []),
+    ]));
 
-    function serializeOrder(order: Order) {
-        return order.key + (order.key === 'USING' ? ' ' + order.op : '');
+    function serializeOrder(order: Order): Token[] {
+        return [
+            keyWord(order.key),
+            ...(order.key === 'USING' ? [identifier(order.op)] : []),
+        ];
     }
 }
