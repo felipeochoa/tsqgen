@@ -1,12 +1,14 @@
 import * as quote from './quote';
 import { commaSeparate, Serializable, Token, keyWord, identifier, literal, operator, specialCharacter } from './serialize';
-import { Subquery } from './select-types';
+import { Subquery, Tuple } from './select-types';
 import { SQL } from './types';
 
 // Expression syntax taken from https://www.postgresql.org/docs/current/sql-expressions.html
 
-type AnyKey = string | symbol | number;
-type SingleTypeSubquery<Value> = Subquery<Partial<Record<AnyKey, Value>>>;
+interface SingleTypeSubquery<Value> extends Serializable {
+    /** Unused field to track subquery type. */
+    _tuple: Tuple<Record<string, Value>>;
+}
 
 export type Order = {key: 'ASC'} | {key: 'DESC'} | {key: 'USING', op: string};
 export type OrderArg<T = unknown> = {expr: Expression<T>, order?: Order, nulls?: 'NULLS FIRST' | 'NULLS LAST'};
@@ -33,7 +35,7 @@ export interface Expression<T> {
     collate(this: Expression<T & string>, collation: string): Expression<string>;
     castAs<T2>(typeName: string): Expression<T2>;
     in(...values: Expression<T>[]): Expression<boolean>;
-    // in(subquery: SingleTypeSubquery<T>): Expression<boolean>; TODO -- this causes lots of type errors
+    in(subquery: SingleTypeSubquery<T>): Expression<boolean>;
     notIn(...values: Expression<T>[]): Expression<boolean>;
     notIn(subquery: SingleTypeSubquery<T>): Expression<boolean>;
     any(operator: string, array: Expression<T[]> | SingleTypeSubquery<T>): Expression<boolean>;

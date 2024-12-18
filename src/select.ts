@@ -354,8 +354,16 @@ class SubqueryImpl<FromTuple, SelectTuple> {
 
     as<Alias extends string>(alias: Alias): From<Record<Alias, SelectTuple>>
         { return new FromSubquery(alias, this); }
-    scalar(): Expression<SelectTuple[keyof SelectTuple]>
-        { return new SubqueryExpr(this); }
+
+    scalar(): Expression<SelectTuple[keyof SelectTuple]> {
+        // https://www.postgresql.org/docs/current/sql-expressions.html#SQL-SYNTAX-SCALAR-SUBQUERIES
+        if (Object.keys(this.tuple).length !== 1)
+            throw new Error('Scalar subqueries must return exactly one column');
+        return new SubqueryExpr({
+            serialize: this.serialize.bind(this),
+            _tuple: this.tuple,
+        });
+    }
 
     serialize(): Token[] {
         const {state} = this;
