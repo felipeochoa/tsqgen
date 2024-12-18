@@ -1,5 +1,5 @@
 // Nominal typing helper
-declare const __brand: unique symbol;
+const __brand = Symbol('brand');
 
 export type Uuid = {[__brand]: 'uuid'};
 export type Enum<E> = {[__brand]: 'enum', options: E};
@@ -8,6 +8,12 @@ export type Jsonb = {[__brand]: 'jsonb'};
 export type Xml = {[__brand]: 'xml'};
 export type Range<T> = {[__brand]: 'range', subtype: T};
 export type MultiRange<T> = {[__brand]: 'multirange', subtype: T};
+
+export function tagUuid(hex: string): Uuid {
+    const uuidRegex = /^[0-9a-f]{8}-?[0-9a-f]{4}-?[1-5][0-9a-f]{3}-?[89ab][0-9a-f]{3}-?[0-9a-f]{12}$/i;
+    if (!uuidRegex.test(hex)) throw new Error('Invalid UUID: ' + hex);
+    return hex as {} as Uuid;
+}
 
 // Embed SQL types into TS
 interface NullableType<T> {

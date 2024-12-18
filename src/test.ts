@@ -1,6 +1,7 @@
 import { table } from './select';
 import { $, agg, not } from './expression';
 import * as sql from './types';
+import { unlex } from './serialize';
 
 const posts = table('posts', {
     id: sql.uuid.notNull(),
@@ -29,10 +30,11 @@ const query =
         }))
         .where(({s, up}) => not(s.deleted).and(up.user_id.eq(params.userId)));
 
+console.log(unlex(query.serialize()), params({userId: sql.tagUuid('2db78c1c29014a898be5992c675b08eb')}));
+
 const query2 = userPost.as('us')
     .select(() => ({count: agg<number>('COUNT', [])}))
     .where(({us}) => us.user_id.eq(params.userId))
     .scalar();
 
-console.log(query2.serialize());
-client.query(query.toString(), params({userId: 'xyz' as sql.Uuid}));
+console.log(unlex(query2.serialize()), params({userId: sql.tagUuid('fc48f576-d8ff-4ed9-a870-32baff3ff985')}));
