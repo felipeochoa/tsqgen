@@ -11,3 +11,4 @@
 * [ ] join USING
 * [ ] column aliases in from_item
 * [ ] TABLESAMPLE
+* [ ] SELECT ... FROM unnest(...) https://www.postgresql.org/docs/current/xfunc-sql.html#XFUNC-SQL-TABLE-FUNCTIONS
