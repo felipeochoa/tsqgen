@@ -2,7 +2,6 @@
 * [ ] Add support for UPDATE
 * [ ] Add support for DELETE
 * [ ] Unit tests
-* [ ] Finish aggregate-functions
 * [ ] Inline window definitions
 * [ ] (SELECT X ORDER BY Y) UNION (SELECT A UNION B LIMIT N)
 * [ ] with queries

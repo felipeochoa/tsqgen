@@ -1,4 +1,4 @@
-import { isExpression, Aggregate, Expression, OrderedSetAggregate, OrderArg } from './expression';
+import { Aggregate, Expression, JsonArrayAgg, JsonObjectAgg, OrderedSetAggregate, OrderArg, isExpression } from './expression';
 import { Json, Jsonb, MultiRange, Range, Xml } from './types';
 
 type Defined<T> = T extends undefined ? never : T;
@@ -56,13 +56,14 @@ export const every = define<[boolean], boolean>('every');
 export const jsonAgg = define<[unknown], Json>('json_agg');
 export const jsonbAgg = define<[unknown], Jsonb>('jsonb_agg');
 
-// TODO: json_objectagg has funky syntax
+export const jsonObjectAgg = <K, V>(key: Expression<K>, value: Expression<V>): JsonObjectAgg<K, V> =>
+    new JsonObjectAgg(key, value);
 
 /**
  * Collects all the key/value pairs into a JSON object. Key arguments are coerced to text; value arguments are
  * converted as per to_json or to_jsonb. Values can be null, but keys cannot.
  */
-export const jsonObjectAgg = define<[key: unknown, value: unknown], Json>('json_object_agg');
+export const jsonObjectAggLegacy = define<[key: unknown, value: unknown], Json>('json_object_agg');
 export const jsonbObjectAgg = define<[key: unknown, value: unknown], Jsonb>('jsonb_object_agg');
 
 /**
@@ -80,7 +81,11 @@ export const jsonbObjectAggStrict = define<[key: unknown, value: unknown], Jsonb
 export const jsonObjectAggUnique = define<[key: unknown, value: unknown], Json>('json_object_agg_unique');
 export const jsonbObjectAggUnique = define<[key: unknown, value: unknown], Jsonb>('jsonb_object_agg_unique');
 
-// TODO: json_arrayagg has funky syntax
+/**
+ * Aggregate values into a JSON array. If ABSENT ON NULL is specified, any NULL values are omitted. If ORDER BY is
+ * specified, the elements will appear in the array in that order rather than in the input order.
+ */
+export const jsonArrayAgg = <T>(value: Expression<T>): JsonArrayAgg<T> => new JsonArrayAgg(value);
 
 /**
  * Collects all the key/value pairs into a JSON object. Key arguments are coerced to text; value arguments are

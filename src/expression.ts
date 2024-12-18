@@ -1,7 +1,7 @@
 import * as quote from './quote';
 import { commaSeparate, Serializable, Token, keyWord, identifier, literal, operator, specialCharacter } from './serialize';
 import { Subquery, Tuple } from './select-types';
-import { SQL } from './types';
+import { Json, SQL } from './types';
 
 // Expression syntax taken from https://www.postgresql.org/docs/current/sql-expressions.html
 
@@ -288,6 +288,98 @@ export class Aggregate<T> extends BaseExpr<T> {
             ...orderBy,
             specialCharacter(')'),
             ...filter
+        ];
+    }
+}
+
+/**  json_arrayagg has unique syntax as an aggregate */
+interface JsonObjectAggOnNull extends Expression<Json> {
+    absentOnNull(): JsonObjectAggUniqueKeys;
+    nullOnNull(): JsonObjectAggUniqueKeys;
+}
+
+interface JsonObjectAggUniqueKeys extends Expression<Json> {
+    withUniqueKeys(): Expression<Json>;
+    withoutUniqueKeys(): Expression<Json>;
+}
+
+export class JsonObjectAgg<K, V> extends BaseExpr<Json> implements JsonObjectAggOnNull, JsonObjectAggUniqueKeys {
+    private readonly onNullOption?: 'NULL' | 'ABSENT';
+    private readonly uniqueKeys?: 'WITH' | 'WITHOUT';
+
+    constructor(private readonly key: Expression<K>, private readonly value: Expression<V>,
+                onNullOption?: 'NULL' | 'ABSENT', uniqueOption?: 'WITH' | 'WITHOUT') {
+        super();
+        this.onNullOption = onNullOption;
+        this.uniqueKeys = uniqueOption;
+    }
+
+    absentOnNull(): JsonObjectAggUniqueKeys {
+        return new JsonObjectAgg(this.key, this.value, 'ABSENT', this.uniqueKeys);
+    }
+
+    nullOnNull(): JsonObjectAggUniqueKeys {
+        return new JsonObjectAgg(this.key, this.value, 'NULL', this.uniqueKeys);
+    }
+
+    withUniqueKeys(): Expression<Json> {
+        return new JsonObjectAgg(this.key, this.value, this.onNullOption, 'WITH');
+    }
+
+    withoutUniqueKeys(): Expression<Json> {
+        return new JsonObjectAgg(this.key, this.value, this.onNullOption, 'WITHOUT');
+    }
+
+    serialize(): Token[] {
+        const onNull = this.onNullOption ? [keyWord(this.onNullOption), keyWord('ON'), keyWord('NULL')] : [];
+        const unique = this.uniqueKeys ? [keyWord(this.uniqueKeys), keyWord('UNIQUE KEYS')] : [];
+        return [
+            identifier('json_object_agg'),
+            specialCharacter('('),
+            ...this.key.serialize(),
+            specialCharacter(':'),
+            ...this.value.serialize(),
+            ...onNull,
+            ...unique,
+            specialCharacter(')'),
+        ];
+    }
+}
+
+export class JsonArrayAgg<T> extends BaseExpr<Json> {
+    private readonly orderByClause?: OrderArg[];
+    private readonly onNullOption?: 'NULL' | 'ABSENT';
+
+    constructor(private readonly value: Expression<T>, orderByClause?: OrderArg[], onNullOption?: 'NULL' | 'ABSENT') {
+        super();
+        this.orderByClause = orderByClause;
+        this.onNullOption = onNullOption;
+    }
+
+    orderBy(orderBy: OrderArg[]): Omit<JsonArrayAgg<T>, 'orderBy'> {
+        return new JsonArrayAgg(this.value, orderBy, this.onNullOption);
+    }
+
+    absentOnNull(): Omit<JsonArrayAgg<T>, 'orderBy' | 'absentOnNull' | 'nullOnNull'> {
+        return new JsonArrayAgg(this.value, this.orderByClause, 'ABSENT');
+    }
+
+    nullOnNull(): Omit<JsonArrayAgg<T>, 'orderBy' | 'absentOnNull' | 'nullOnNull'> {
+        return new JsonArrayAgg(this.value, this.orderByClause, 'NULL');
+    }
+
+    serialize(): Token[] {
+        // https://www.postgresql.org/docs/current/functions-aggregate.html#id-1.5.8.27.6.2.4.15.1.1.1
+        const orderBy = this.orderByClause ? serializeOrderBy(this.orderByClause) : [];
+        const onNull = this.onNullOption ? [keyWord(this.onNullOption), keyWord('ON'), keyWord('NULL')] : [];
+        return [
+            identifier('json_array_agg'),
+            specialCharacter('('),
+            ...this.value.serialize(),
+            ...orderBy,
+            ...onNull,
+            specialCharacter(')'),
+            // TODO: RETURNING
         ];
     }
 }

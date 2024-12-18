@@ -43,10 +43,11 @@ export const literal = (value: string): Token => ({type: 'Literal', value});
 export const operator = (value: string): Token => ({type: 'Operator', value});
 export const specialCharacter = (value: SpecialCharacter): Token => ({type: 'SpecialCharacter', value});
 
-type SpecialCharacter = '(' | ')' | '[' | ']' | '*' | ',' | '.';
+type SpecialCharacter = '(' | ')' | '[' | ']' | '*' | ',' | '.' | ':';
 
 // TODO: Cross-check against https://www.postgresql.org/docs/current/sql-keywords-appendix.html
 type KeyWord =
+    | 'ABSENT'
     | 'ALL'
     | 'AND'
     | 'ARRAY'
@@ -83,6 +84,7 @@ type KeyWord =
     | 'LIMIT'
     | 'NO KEY UPDATE'
     | 'NOWAIT'
+    | 'NULL'
     | 'NULLS FIRST'
     | 'NULLS LAST'
     | 'NULLS'
@@ -104,10 +106,13 @@ type KeyWord =
     | 'UNBOUNDED FOLLOWING'
     | 'UNBOUNDED PRECEDING'
     | 'UNION'
+    | 'UNIQUE KEYS'
     | 'UPDATE'
     | 'USING'
     | 'WHERE'
     | 'WINDOW'
     | 'WITH ORDINALITY'
     | 'WITH TIES'
-    | 'WITHIN GROUP';
+    | 'WITH'
+    | 'WITHIN GROUP'
+    | 'WITHOUT';
