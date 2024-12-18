@@ -20,8 +20,8 @@ const userPost = table('user_post', {
 });
 
 const params = $<{userId: sql.Uuid}>({userId: sql.uuid.notNull()});
-const query =
-    posts.as('s').join(userPost.as('up'), ({s, up}) => s.id.eq(up.post_id))
+const query
+    = posts.as('s').join(userPost.as('up'), ({s, up}) => s.id.eq(up.post_id))
         .select(({s}) => ({
             id: s.id, name: s.name, last_mod_time: s.last_mod_time,
             last_mod_author: s.last_mod_author,

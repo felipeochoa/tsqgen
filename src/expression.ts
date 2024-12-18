@@ -1,55 +1,74 @@
 import * as quote from './quote';
-import { commaSeparate, Serializable, Token, keyWord, identifier, literal, operator, specialCharacter } from './serialize';
+import {
+    Serializable, Token, commaSeparate, identifier, keyWord, literal, operator, specialCharacter,
+} from './serialize';
 import { Subquery, Tuple } from './select-types';
 import { Json, SQL } from './types';
 
 // Expression syntax taken from https://www.postgresql.org/docs/current/sql-expressions.html
 
-interface SingleTypeSubquery<Value> extends Serializable {
-    /** Unused field to track subquery type. */
-    _tuple: Tuple<Record<string, Value>>;
-}
-
-export type Order = {key: 'ASC'} | {key: 'DESC'} | {key: 'USING', op: string};
-export type OrderArg<T = unknown> = {expr: Expression<T>, order?: Order, nulls?: 'NULLS FIRST' | 'NULLS LAST'};
+export type Order = {key: 'ASC'} | {key: 'DESC'} | {key: 'USING'; op: string};
+export type OrderArg<T = unknown> = {expr: FinalExpression<T>; order?: Order; nulls?: 'NULLS FIRST' | 'NULLS LAST'};
 
 declare const __brand: unique symbol;
 const expressionTag = Symbol();
 
+/** An Expression that won't be further manipulated. */
+interface FinalExpression<T> extends Serializable {
+    // This type is needed because Expression is invariant in its type, but we sometimes want a covariant
+    // expression purely for type-checking purposes
+    readonly [expressionTag]: true;
+    readonly [__brand]?: T; // Needed to make typescript actually check that Expression types line up
+}
+
+export type UnknownExpr = FinalExpression<unknown>;
+
+interface SingleTypeSubquery<Value> extends Serializable {
+    /** Unused field to track subquery type. */
+    _tuple: Record<string, FinalExpression<Value>>;
+}
+
 export interface Expression<T> {
     [expressionTag]: true;
     [__brand]?: T; // Needed to make typescript actually check that Expression types line up
-    isNull(): Expression<boolean>;
-    isNotNull(): Expression<boolean>;
-    or(other: Expression<boolean>): Expression<boolean>;
-    and(other: Expression<boolean>): Expression<boolean>;
-    isDistinctFrom(other: Expression<T>): Expression<boolean>;
-    isNotDistinctFrom(other: Expression<T>): Expression<boolean>;
-    eq(other: Expression<T>): Expression<boolean>;
-    lt(this: Expression<T & number>, other: Expression<T>): Expression<boolean>;
-    le(this: Expression<T & number>, other: Expression<T>): Expression<boolean>;
-    gt(this: Expression<T & number>, other: Expression<T>): Expression<boolean>;
-    ge(this: Expression<T & number>, other: Expression<T>): Expression<boolean>;
-    like(this: Expression<T & string>, other: Expression<string>): Expression<boolean>;
-    ilike(this: Expression<T & string>, other: Expression<string>): Expression<boolean>;
-    collate(this: Expression<T & string>, collation: string): Expression<string>;
-    castAs<T2>(typeName: string): Expression<T2>;
-    in(...values: Expression<T>[]): Expression<boolean>;
-    in(subquery: SingleTypeSubquery<T>): Expression<boolean>;
-    notIn(...values: Expression<T>[]): Expression<boolean>;
-    notIn(subquery: SingleTypeSubquery<T>): Expression<boolean>;
-    any(operator: string, array: Expression<T[]> | SingleTypeSubquery<T>): Expression<boolean>;
-    all(operator: string, array: Expression<T[]> | SingleTypeSubquery<T>): Expression<boolean>;
+    isNull: () => Expression<boolean>;
+    isNotNull: () => Expression<boolean>;
+    or: (other: Expression<boolean>) => Expression<boolean>;
+    and: (other: Expression<boolean>) => Expression<boolean>;
+    isDistinctFrom: (other: Expression<T>) => Expression<boolean>;
+    isNotDistinctFrom: (other: Expression<T>) => Expression<boolean>;
+    eq: (other: Expression<T>) => Expression<boolean>;
+    lt: (this: Expression<T & number>, other: Expression<T>) => Expression<boolean>;
+    le: (this: Expression<T & number>, other: Expression<T>) => Expression<boolean>;
+    gt: (this: Expression<T & number>, other: Expression<T>) => Expression<boolean>;
+    ge: (this: Expression<T & number>, other: Expression<T>) => Expression<boolean>;
+    like: (this: Expression<T & string>, other: Expression<string>) => Expression<boolean>;
+    ilike: (this: Expression<T & string>, other: Expression<string>) => Expression<boolean>;
+    collate: (this: Expression<T & string>, collation: string) => Expression<string>;
+    castAs: <T2>(typeName: string) => Expression<T2>;
+    in: ((...values: Expression<T>[]) => Expression<boolean>)
+        & ((subquery: SingleTypeSubquery<T>) => Expression<boolean>);
+    notIn: ((...values: Expression<T>[]) => Expression<boolean>)
+           & ((subquery: SingleTypeSubquery<T>) => Expression<boolean>);
+    any: (operator: string, array: Expression<T[]> | SingleTypeSubquery<T>) => Expression<boolean>;
+    all: (operator: string, array: Expression<T[]> | SingleTypeSubquery<T>) => Expression<boolean>;
 
-    asc(nulls?: 'NULLS FIRST' | 'NULLS LAST'): OrderArg;
-    desc(nulls?: 'NULLS FIRST' | 'NULLS LAST'): OrderArg;
-    using(op: string, nulls?: 'NULLS FIRST' | 'NULLS LAST'): OrderArg;
+    asc: (nulls?: 'NULLS FIRST' | 'NULLS LAST') => OrderArg<T>;
+    desc: (nulls?: 'NULLS FIRST' | 'NULLS LAST') => OrderArg<T>;
+    using: (op: string, nulls?: 'NULLS FIRST' | 'NULLS LAST') => OrderArg<T>;
 
-    serialize(): Token[];
+    serialize: () => Token[];
 }
 
+const assertType = <T>(t: T) => t;
+
 export const isExpression = <T, O extends object>(x: Expression<T> | O):
-    x is Expression<T> => Boolean((x as {readonly [expressionTag]?: undefined})[expressionTag]);
+    x is Expression<T> => Boolean(expressionTag in x
+                                  && assertType<{readonly [expressionTag]?: true}>(x)[expressionTag]);
+
+export const isFinalExpression = <T, O extends object>(x: FinalExpression<T> | O):
+    x is FinalExpression<T> => Boolean(expressionTag in x
+                                       && assertType<{readonly [expressionTag]?: true}>(x)[expressionTag]);
 
 abstract class BaseExpr<T> implements Expression<T> {
     [expressionTag] = true as const;
@@ -104,11 +123,11 @@ abstract class BaseExpr<T> implements Expression<T> {
         return new InfixExpr(this, op, new SubqueryExpr(arrayExpr));
     }
 
-    asc(nulls?: 'NULLS FIRST' | 'NULLS LAST'): OrderArg
+    asc(nulls?: 'NULLS FIRST' | 'NULLS LAST'): OrderArg<T>
         { return {expr: this, order: {key: 'ASC'}, nulls}; }
-    desc(nulls?: 'NULLS FIRST' | 'NULLS LAST'): OrderArg
+    desc(nulls?: 'NULLS FIRST' | 'NULLS LAST'): OrderArg<T>
         { return {expr: this, order: {key: 'DESC'}, nulls}; }
-    using(op: string, nulls?: 'NULLS FIRST' | 'NULLS LAST'): OrderArg
+    using(op: string, nulls?: 'NULLS FIRST' | 'NULLS LAST'): OrderArg<T>
         { return {expr: this, order: {key: 'USING', op}, nulls}; }
 
     abstract serialize(): Token[];
@@ -123,7 +142,7 @@ export class SubqueryExpr<Value> extends BaseExpr<Value> {
         return [
             specialCharacter('('),
             ...this.subquery.serialize(),
-            specialCharacter(')')
+            specialCharacter(')'),
         ];
     }
 }
@@ -141,8 +160,7 @@ class Constant<T> extends BaseExpr<T> {
 type StaticStringsOnly<T> = T extends string ? (string extends T ? never : T) : T;
 
 export const constant = <T extends string | number | boolean | null>(value: StaticStringsOnly<T>): Expression<T> =>
-    new Constant(value);
-
+    new Constant(value as T);
 
 class Identifier<T> extends BaseExpr<T> {
     constructor(private name: string) {
@@ -154,8 +172,8 @@ class Identifier<T> extends BaseExpr<T> {
     }
 }
 
-class PrefixExpr<T> extends BaseExpr<T> {
-    constructor(private op: string, private operand: Expression<unknown>) {
+class PrefixExpr<Op, Result> extends BaseExpr<Result> {
+    constructor(private op: string, private operand: Expression<Op>) {
         super();
     }
 
@@ -165,13 +183,13 @@ class PrefixExpr<T> extends BaseExpr<T> {
             specialCharacter('('),
             operator(this.op),
             ...operand,
-            specialCharacter(')')
+            specialCharacter(')'),
         ];
     }
 }
 
-class PostfixExpr<T> extends BaseExpr<T> {
-    constructor(private operand: Expression<unknown>, private op: string) {
+class PostfixExpr<Op, T> extends BaseExpr<T> {
+    constructor(private operand: Expression<Op>, private op: string) {
         super();
     }
 
@@ -181,13 +199,13 @@ class PostfixExpr<T> extends BaseExpr<T> {
             specialCharacter('('),
             ...operand,
             operator(this.op),
-            specialCharacter(')')
+            specialCharacter(')'),
         ];
     }
 }
 
-class InfixExpr<T> extends BaseExpr<T> {
-    constructor(private left: Expression<unknown>, private op: string, private right: Expression<unknown>) {
+class InfixExpr<L, R, T> extends BaseExpr<T> {
+    constructor(private left: Expression<L>, private op: string, private right: Expression<R>) {
         super();
     }
 
@@ -199,14 +217,14 @@ class InfixExpr<T> extends BaseExpr<T> {
             ...left,
             identifier(this.op),
             ...right,
-            specialCharacter(')')
+            specialCharacter(')'),
         ];
     }
 }
 
-class MultiOperandExpr<T> extends BaseExpr<T> {
+class MultiOperandExpr<L, R, T> extends BaseExpr<T> {
     // Like InfixExpr, but can take multiple operands on the right
-    constructor(private left: Expression<unknown>, private op: string, private right: Expression<unknown>[]) {
+    constructor(private left: Expression<L>, private op: string, private right: Expression<R>[]) {
         super();
     }
 
@@ -220,13 +238,13 @@ class MultiOperandExpr<T> extends BaseExpr<T> {
             specialCharacter('('),
             ...commaSeparate(right),
             specialCharacter(')'),
-            specialCharacter(')')
+            specialCharacter(')'),
         ];
     }
 }
 
 class FuncExpr<T> extends BaseExpr<T> {
-    constructor(private functionName: string, private args: Expression<unknown>[]) {
+    constructor(private functionName: string, private args: FinalExpression<unknown>[]) {
         super();
     }
 
@@ -237,7 +255,7 @@ class FuncExpr<T> extends BaseExpr<T> {
             identifier(fn),
             specialCharacter('('),
             ...commaSeparate(values),
-            specialCharacter(')')
+            specialCharacter(')'),
         ];
     }
 }
@@ -287,20 +305,20 @@ export class Aggregate<T> extends BaseExpr<T> {
             ...commaSeparate(args),
             ...orderBy,
             specialCharacter(')'),
-            ...filter
+            ...filter,
         ];
     }
 }
 
 /**  json_arrayagg has unique syntax as an aggregate */
 interface JsonObjectAggOnNull extends Expression<Json> {
-    absentOnNull(): JsonObjectAggUniqueKeys;
-    nullOnNull(): JsonObjectAggUniqueKeys;
+    absentOnNull: () => JsonObjectAggUniqueKeys;
+    nullOnNull: () => JsonObjectAggUniqueKeys;
 }
 
 interface JsonObjectAggUniqueKeys extends Expression<Json> {
-    withUniqueKeys(): Expression<Json>;
-    withoutUniqueKeys(): Expression<Json>;
+    withUniqueKeys: () => Expression<Json>;
+    withoutUniqueKeys: () => Expression<Json>;
 }
 
 export class JsonObjectAgg<K, V> extends BaseExpr<Json> implements JsonObjectAggOnNull, JsonObjectAggUniqueKeys {
@@ -347,13 +365,12 @@ export class JsonObjectAgg<K, V> extends BaseExpr<Json> implements JsonObjectAgg
 }
 
 export class JsonArrayAgg<T> extends BaseExpr<Json> {
-    private readonly orderByClause?: OrderArg[];
-    private readonly onNullOption?: 'NULL' | 'ABSENT';
-
-    constructor(private readonly value: Expression<T>, orderByClause?: OrderArg[], onNullOption?: 'NULL' | 'ABSENT') {
+    constructor(
+        private readonly value: Expression<T>,
+        private readonly orderByClause?: OrderArg[],
+        private readonly onNullOption?: 'NULL' | 'ABSENT',
+    ) {
         super();
-        this.orderByClause = orderByClause;
-        this.onNullOption = onNullOption;
     }
 
     orderBy(orderBy: OrderArg[]): Omit<JsonArrayAgg<T>, 'orderBy'> {
@@ -409,14 +426,14 @@ export class OrderedSetAggregate<T> extends BaseExpr<T> {
             specialCharacter('('),
             ...orderBy,
             specialCharacter(')'),
-            ...filter
+            ...filter,
         ];
     }
 }
 
 export function agg<T>(name: string, args: Expression<unknown>[]): Aggregate<T>;
 export function agg<T>(name: string, args: Expression<unknown>[], _: 'WITHIN GROUP', orderBy: OrderArg[]):
-    OrderedSetAggregate<T>;
+OrderedSetAggregate<T>;
 export function agg<T>(name: string, args: Expression<unknown>[], _?: string, orderBy?: OrderArg[]) {
     if (orderBy === undefined) return new Aggregate<T>(name, args);
     return new OrderedSetAggregate<T>(name, args, orderBy);
@@ -440,7 +457,7 @@ class WindowCall<T> extends BaseExpr<T> {
             specialCharacter(')'),
             ...filter,
             keyWord('OVER'),
-            identifier(this.over)
+            identifier(this.over),
         ];
     }
 }
@@ -457,8 +474,8 @@ export class PartialWindowCall<T> {
     }
 }
 
-class Cast<T> extends BaseExpr<T> {
-    constructor(private expression: Expression<unknown>, private toType: string) {
+class Cast<Orig, NewType> extends BaseExpr<NewType> {
+    constructor(private expression: Expression<Orig>, private toType: string) {
         super();
     }
 
@@ -470,7 +487,7 @@ class Cast<T> extends BaseExpr<T> {
             ...expr,
             keyWord('AS'),
             identifier(this.toType),
-            specialCharacter(')')
+            specialCharacter(')'),
         ];
     }
 }
@@ -496,12 +513,10 @@ export function array<T>(...args: [Subquery<T>] | Expression<T>[]): Expression<T
     return new ArrayExpr(args);
 }
 
-export const row = <T extends any[]>(...args: {[I in keyof T]: Expression<T[I]>}): Expression<T> =>
+export const row = <T extends unknown[]>(...args: {[I in keyof T]: Expression<T[I]>}): Expression<T> =>
     new FuncExpr('ROW', args);
 
-export const exists = (subquery: Subquery<any>) => new FuncExpr<boolean>('EXISTS', [subquery.scalar()]);
-
-
+export const exists = (subquery: Subquery<unknown>) => new FuncExpr<boolean>('EXISTS', [subquery.scalar()]);
 
 class Field<T> extends BaseExpr<T> {
     constructor(private tableName: string, private name: string) {
@@ -512,7 +527,7 @@ class Field<T> extends BaseExpr<T> {
         return [
             identifier(quote.tableName(this.tableName)),
             specialCharacter('.'),
-            identifier(quote.columnName(this.name))
+            identifier(quote.columnName(this.name)),
         ];
     }
 }
@@ -533,7 +548,7 @@ type Parameters<T> = ((t: T) => unknown[]) & {[K in keyof T]: Expression<T[K]>};
 
 export function $<T>(types: {[K in keyof T]: SQL<T[K]>}): Parameters<T> {
     const keys = Object.keys(types) as (keyof T)[];
-    const ret = {} as {[K in keyof T]: Expression<T[K]>};
+    const ret = Object.assign({}) as {[K in keyof T]: Expression<T[K]>};
     keys.forEach((n, i) => ret[n as keyof T] = new ParameterExpr(i));
     const ret2 = (t: T): unknown[] => keys.map(k => t[k]);
     return Object.assign(ret2, ret);
@@ -550,7 +565,7 @@ function serializeFilterWhere(expr: Expression<boolean> | undefined): Token[] {
         specialCharacter('('),
         keyWord('WHERE'),
         ...expr.serialize(),
-        specialCharacter(')')
+        specialCharacter(')'),
     ];
 }
 

@@ -1,16 +1,15 @@
-import { constant, field, isExpression, Expression, OrderArg, SubqueryExpr } from './expression';
+import { Expression, OrderArg, SubqueryExpr, UnknownExpr, constant, field, isFinalExpression } from './expression';
 import * as quote from './quote';
 import {
     FrameRef, From, GroupingTree, Nullable, RollupArgs, SelectFrom, Subquery, Tuple, TupleMap, UnitSubq,
     WindowFrame, WindowParams,
 } from './select-types';
-import { commaSeparate, keyWord, literal, identifier, specialCharacter, Token } from './serialize';
+import { Token, commaSeparate, identifier, keyWord, literal, specialCharacter } from './serialize';
 import { SQL } from './types';
 
 // https://www.postgresql.org/docs/current/sql-select.html
 
 type BoolExpr = Expression<boolean>;
-type UnknownExpr = Expression<unknown>;
 
 function tupleMap<T>(): T {
     return new Proxy<any>({}, {
@@ -93,7 +92,7 @@ function serializeJoin<T1, T2>(type: 'INNER' | 'LEFT' | 'RIGHT' | 'FULL', latera
         ...rightTokens,
         keyWord('ON'),
         ...onTokens,
-        specialCharacter(')')
+        specialCharacter(')'),
     ];
 }
 
@@ -154,7 +153,7 @@ class CrossJoin<T1, T2> extends BaseFrom<T1 & T2> {
             keyWord('CROSS JOIN'),
             ...lateral,
             ...rightTokens,
-            specialCharacter(')')
+            specialCharacter(')'),
         ];
     }
 }
@@ -185,7 +184,7 @@ class Table<Alias extends string, RowType> extends BaseFrom<Record<Alias, RowTyp
         return [
             identifier(this.realName),
             keyWord('AS'),
-            identifier(this.alias)
+            identifier(this.alias),
         ];
     }
 }
@@ -222,7 +221,7 @@ class FromFunction<Alias extends string, T> extends BaseFrom<Record<Alias, T>> {
             ...args,
             specialCharacter(')'),
             ...withOrdinality,
-            ...alias
+            ...alias,
         ];
     }
 }
@@ -242,7 +241,7 @@ class FromSubquery<Alias extends string, T> extends BaseFrom<Record<Alias, T>> {
             ...subquery,
             specialCharacter(')'),
             keyWord('AS'),
-            alias
+            alias,
         ];
     }
 }
@@ -253,11 +252,11 @@ export const rollup = (args: RollupArgs): GroupingTree => ({type: 'ROLLUP', args
 export const cube = (args: RollupArgs): GroupingTree => ({type: 'CUBE' as const, args});
 export const groupingSets = (args: GroupingTree[]): GroupingTree => ({type: 'GROUPING SETS', args});
 
-type Distinct = {type: 'row'} | {type: 'on', key: UnknownExpr[]};
+type Distinct = {type: 'row'} | {type: 'on'; key: UnknownExpr[]};
 
 type WindowState =
-    | {type: 'fresh', name: string, partitionBy: UnknownExpr[], orderBy?: OrderArg[], frame?: WindowFrame}
-    | {type: 'ref', name: string, existingWindowName: string, orderBy?: OrderArg[], frame?: WindowFrame};
+    | {type: 'fresh'; name: string; partitionBy: UnknownExpr[]; orderBy?: OrderArg[]; frame?: WindowFrame}
+    | {type: 'ref'; name: string; existingWindowName: string; orderBy?: OrderArg[]; frame?: WindowFrame};
 
 interface SubqueryState<FromTuple, SelectTuple> {
     distinct?: Distinct;
@@ -266,20 +265,20 @@ interface SubqueryState<FromTuple, SelectTuple> {
     groupByDistinct: boolean;
     having?: BoolExpr;
     windows: WindowState[];
-    setOps: Array<{
-        type: 'UNION' | 'INTERSECT' | 'EXCEPT',
-        all: boolean,
-        query: UnitSubq<FromTuple, SelectTuple, any>,
-    }>;
+    setOps: {
+        type: 'UNION' | 'INTERSECT' | 'EXCEPT';
+        all: boolean;
+        query: UnitSubq<FromTuple, SelectTuple, boolean>;
+    }[];
     orderBy?: OrderArg[];
     offset?: Expression<number>;
-    fetch?: {fetch: Expression<number>, withTies: boolean};
+    fetch?: {fetch: Expression<number>; withTies: boolean};
     limit?: Expression<number> | 'ALL';
-    locks: Array<{
-        strength: 'UPDATE' | 'NO KEY UPDATE' | 'SHARE' | 'KEY SHARE',
-        block?: 'NOWAIT' | 'SKIP LOCKED',
-        tables?: string[],
-    }>;
+    locks: {
+        strength: 'UPDATE' | 'NO KEY UPDATE' | 'SHARE' | 'KEY SHARE';
+        block?: 'NOWAIT' | 'SKIP LOCKED';
+        tables?: string[];
+    }[];
 }
 
 class SubqueryImpl<FromTuple, SelectTuple> {
@@ -318,19 +317,19 @@ class SubqueryImpl<FromTuple, SelectTuple> {
         { return new WindowMaker(name, w => this.update({windows: this.state.windows.concat(w)})); }
 
     private addSetOp(type: 'UNION' | 'INTERSECT' | 'EXCEPT', all: boolean,
-                     query: UnitSubq<FromTuple, SelectTuple, any>)
+                     query: UnitSubq<FromTuple, SelectTuple, boolean>)
         { return this.update({setOps: this.state.setOps.concat({type, all, query})}); }
-    union(other: UnitSubq<FromTuple, SelectTuple, any>)
+    union(other: UnitSubq<FromTuple, SelectTuple, boolean>)
         { return this.addSetOp('UNION', false, other); }
-    unionAll(other: UnitSubq<FromTuple, SelectTuple, any>)
+    unionAll(other: UnitSubq<FromTuple, SelectTuple, boolean>)
         { return this.addSetOp('UNION', true, other); }
-    intersect(other: UnitSubq<FromTuple, SelectTuple, any>)
+    intersect(other: UnitSubq<FromTuple, SelectTuple, boolean>)
         { return this.addSetOp('INTERSECT', false, other); }
-    intersectAll(other: UnitSubq<FromTuple, SelectTuple, any>)
+    intersectAll(other: UnitSubq<FromTuple, SelectTuple, boolean>)
         { return this.addSetOp('INTERSECT', true, other); }
-    except(other: UnitSubq<FromTuple, SelectTuple, any>)
+    except(other: UnitSubq<FromTuple, SelectTuple, boolean>)
         { return this.addSetOp('EXCEPT', false, other); }
-    exceptAll(other: UnitSubq<FromTuple, SelectTuple, any>)
+    exceptAll(other: UnitSubq<FromTuple, SelectTuple, boolean>)
         { return this.addSetOp('EXCEPT', true, other); }
 
     orderBy(order: (t: TupleMap<FromTuple>) => Array<UnknownExpr | OrderArg>)
@@ -359,7 +358,7 @@ class SubqueryImpl<FromTuple, SelectTuple> {
         // https://www.postgresql.org/docs/current/sql-expressions.html#SQL-SYNTAX-SCALAR-SUBQUERIES
         if (Object.keys(this.tuple).length !== 1)
             throw new Error('Scalar subqueries must return exactly one column');
-        return new SubqueryExpr({
+        return new SubqueryExpr<SelectTuple[keyof SelectTuple]>({
             serialize: this.serialize.bind(this),
             _tuple: this.tuple,
         });
@@ -367,7 +366,7 @@ class SubqueryImpl<FromTuple, SelectTuple> {
 
     serialize(): Token[] {
         const {state} = this;
-        const fields = Object.entries<Expression<unknown>>(this.tuple);
+        const fields = Object.entries<UnknownExpr>(this.tuple);
 
         const parts: Token[] = [keyWord('SELECT')];
         if (state.distinct)
@@ -376,7 +375,7 @@ class SubqueryImpl<FromTuple, SelectTuple> {
         else parts.push(...commaSeparate(fields.map(([name, expr]) => [
             ...expr.serialize(),
             keyWord('AS'),
-            identifier(quote.identifier(name))
+            identifier(quote.identifier(name)),
         ])));
 
         parts.push(keyWord('FROM'), ...this.from.serialize());
@@ -442,8 +441,8 @@ class WindowMaker<FromTuple, Next> {
     }
 }
 
-function resolveOrderArgs(args: Array<UnknownExpr | OrderArg>): OrderArg[] {
-    return args.map(arg => isExpression(arg) ? {expr: arg} : arg);
+function resolveOrderArgs(args: (UnknownExpr | OrderArg)[]): OrderArg[] {
+    return args.map(arg => isFinalExpression(arg) ? {expr: arg} : arg);
 }
 
 function serializeDistinct(distinct: Distinct): Token[] {
@@ -467,7 +466,7 @@ function serializeGroupBy(groupBy: GroupingTree, distinct: boolean): Token[] {
 
     function go(tree: GroupingTree, ixInParent: number) {
         if (ixInParent > 0) ret.push(specialCharacter(','));
-        if (isExpression(tree)) return ret.push(...tree.serialize());
+        if (isFinalExpression(tree)) return ret.push(...tree.serialize());
         if (Array.isArray(tree)) return tree.forEach(go);
         ret.push(keyWord(tree.type), specialCharacter('('));
         tree.args.forEach(go);
@@ -480,7 +479,7 @@ function serializeWindow(window: WindowState): Token[] {
     if (window.type === 'fresh') {
         ret.push(keyWord('PARTITION BY'));
         window.partitionBy.forEach((e, i) => {
-            i > 0 && ret.push(specialCharacter(','));
+            if (i > 0) ret.push(specialCharacter(','));
             ret.push(...e.serialize());
         });
     } else {

@@ -1,23 +1,25 @@
-import { Aggregate, Expression, JsonArrayAgg, JsonObjectAgg, OrderedSetAggregate, OrderArg, isExpression } from './expression';
+import {
+    Aggregate, Expression, JsonArrayAgg, JsonObjectAgg, OrderArg, OrderedSetAggregate, isExpression,
+} from './expression';
 import { Json, Jsonb, MultiRange, Range, Xml } from './types';
 
 type Defined<T> = T extends undefined ? never : T;
 type Undefined<T> = T extends undefined ? T : never;
 
-const define = <Args extends any[], Return>(name: string) =>
+const define = <Args extends unknown[], Return>(name: string) =>
     (...args: {[I in keyof Args]: Undefined<Args[I]> | Expression<Defined<Args[I]>>}) =>
-    new Aggregate<Return>(name, args);
+        new Aggregate<Return>(name, args);
 
 // https://www.postgresql.org/docs/current/functions-aggregate.html#FUNCTIONS-AGGREGATE-TABLE
 
 /** Returns an arbitrary value from the non-null input values. */
-export const anyValue: <T>(t: Expression<T>) => Expression<T> = define<[any], any>('any_value');
+export const anyValue: <T>(t: Expression<T>) => Expression<T> = define<[unknown], unknown>('any_value');
 
 /**
  * Collects all the input values, including nulls, into an array. Concatenates all the input arrays into an array
  * of one higher dimension. (Array inputs must all have the same dimensionality, and cannot be empty or null.)
  */
-export const arrayAgg: <T>(t: Expression<T>) => Expression<T[]> = define<[any], any[]>('array_agg');
+export const arrayAgg: <T>(t: Expression<T>) => Expression<T[]> = define<[unknown], unknown[]>('array_agg');
 
 /** Computes the average (arithmetic mean) of all the non-null input values. */
 export const avg = define<[number], number>('avg');
@@ -92,10 +94,10 @@ export const jsonArrayAgg = <T>(value: Expression<T>): JsonArrayAgg<T> => new Js
  * converted as per to_json or to_jsonb. The key can not be null. If the value is null then the entry is
  * skipped. If there is a duplicate key an error is thrown.
  */
-export const jsonObjectAggUniqueStrict =
-    define<[key: unknown, value: unknown], Json>('json_object_agg_unique_strict');
-export const jsonbObjectAggUniqueStrict =
-    define<[key: unknown, value: unknown], Jsonb>('jsonb_object_agg_unique_strict');
+export const jsonObjectAggUniqueStrict
+    = define<[key: unknown, value: unknown], Json>('json_object_agg_unique_strict');
+export const jsonbObjectAggUniqueStrict
+    = define<[key: unknown, value: unknown], Jsonb>('jsonb_object_agg_unique_strict');
 
 /**
  * Computes the maximum of the non-null input values. Available for any numeric, string, date/time, or enum type,
@@ -111,11 +113,11 @@ export const min = define<[number], number>('min');
 
 /** Computes the union of the non-null input values. */
 export const rangeAgg: <T>(r: Expression<Range<T>>) => Expression<MultiRange<T>>
-    = define<[Range<any>], MultiRange<any>>('range_agg');
+    = define<[Range<unknown>], MultiRange<unknown>>('range_agg');
 
 /** Computes the intersection of the non-null input values. */
 export const rangeIntersectAgg: <T>(r: Expression<Range<T>>) => Expression<Range<T>>
-    = define<[Range<any>], Range<any>>('range_intersect_agg');
+    = define<[Range<unknown>], Range<unknown>>('range_intersect_agg');
 
 /**
  * Collects all the input values, skipping nulls, into a JSON array. Values are converted to JSON as per to_json or
@@ -196,7 +198,7 @@ export const varSamp = define<[number], number>('var_samp');
 
 // https://www.postgresql.org/docs/current/functions-aggregate.html#FUNCTIONS-ORDEREDSET-TABLE
 
-class PartialOrderedSetAggregate<Args extends any[], Return> {
+class PartialOrderedSetAggregate<Args extends unknown[], Return> {
     constructor(private functionName: string, private args: Expression<unknown>[]) {}
 
     withinGroupOrderBy(elts: {[I in keyof Args]: OrderArg<Args[I]> | Expression<Args[I]>}) {
@@ -225,8 +227,8 @@ export const mode = <T>() => new PartialOrderedSetAggregate<[T], T>('mode', []);
  */
 export function percentileCont(fraction: Expression<number>): PartialOrderedSetAggregate<[number], number>;
 export function percentileCont(fractions: Expression<number[]>): PartialOrderedSetAggregate<[number], number[]>;
-export function percentileCont(fractions: Expression<unknown>): PartialOrderedSetAggregate<[number], any> {
-    return new PartialOrderedSetAggregate<[number], any>('percentile_cont', [fractions]);
+export function percentileCont(fractions: Expression<unknown>): PartialOrderedSetAggregate<[number], unknown> {
+    return new PartialOrderedSetAggregate<[number], unknown>('percentile_cont', [fractions]);
 }
 
 /**
@@ -243,8 +245,8 @@ export function percentileCont(fractions: Expression<unknown>): PartialOrderedSe
  */
 export function percentileDisc<T>(fraction: Expression<number>): PartialOrderedSetAggregate<[T], T>;
 export function percentileDisc<T>(fractions: Expression<number[]>): PartialOrderedSetAggregate<[T], T[]>;
-export function percentileDisc<T>(fractions: Expression<unknown>): PartialOrderedSetAggregate<[T], any> {
-    return new PartialOrderedSetAggregate<[T], any>('percentile_disc', [fractions]);
+export function percentileDisc<T>(fractions: Expression<unknown>): PartialOrderedSetAggregate<[T], unknown> {
+    return new PartialOrderedSetAggregate<[T], unknown>('percentile_disc', [fractions]);
 }
 
 // https://www.postgresql.org/docs/current/functions-aggregate.html#FUNCTIONS-HYPOTHETICAL-TABLE
@@ -252,25 +254,25 @@ export function percentileDisc<T>(fractions: Expression<unknown>): PartialOrdere
  * Computes the rank of the hypothetical row, with gaps; that is, the row number of the first row in its peer
  * group.
  */
-export const rank = <T extends any[]>(...args: {[I in keyof T]: Expression<T[I]>}) =>
+export const rank = <T extends unknown[]>(...args: {[I in keyof T]: Expression<T[I]>}) =>
     new PartialOrderedSetAggregate<T, number>('rank', args);
 
 /** Computes the rank of the hypothetical row, without gaps; this function effectively counts peer groups. */
-export const denseRank = <T extends any[]>(...args: {[I in keyof T]: Expression<T[I]>}) =>
+export const denseRank = <T extends unknown[]>(...args: {[I in keyof T]: Expression<T[I]>}) =>
     new PartialOrderedSetAggregate<T, number>('dense_rank', args);
 
 /**
  * Computes the relative rank of the hypothetical row, that is (rank - 1) / (total rows - 1). The value thus ranges
  * from 0 to 1 inclusive.
  */
-export const percentRank = <T extends any[]>(...args: {[I in keyof T]: Expression<T[I]>}) =>
+export const percentRank = <T extends unknown[]>(...args: {[I in keyof T]: Expression<T[I]>}) =>
     new PartialOrderedSetAggregate<T, number>('percent_rank', args);
 
 /**
  * Computes the cumulative distribution, that is (number of rows preceding or peers with hypothetical row) / (total
  * rows). The value thus ranges from 1/N to 1.
  */
-export const cumeDist = <T extends any[]>(...args: {[I in keyof T]: Expression<T[I]>}) =>
+export const cumeDist = <T extends unknown[]>(...args: {[I in keyof T]: Expression<T[I]>}) =>
     new PartialOrderedSetAggregate<T, number>('cume_dist', args);
 
 // https://www.postgresql.org/docs/current/functions-aggregate.html#FUNCTIONS-GROUPING-TABLE

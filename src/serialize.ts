@@ -1,8 +1,7 @@
 // https://www.postgresql.org/docs/current/sql-syntax-lexical.html
 
-
 export interface Serializable {
-    serialize(): Token[];
+    serialize: () => Token[];
 }
 
 export function unlex(tokens: Token[]): string {
@@ -31,11 +30,11 @@ export function commaSeparate(args: readonly Token[][]): Token[] {
 }
 
 export type Token =
-    | { type: 'KeyWord', value: KeyWord }
-    | { type: 'Identifier', value: string }
-    | { type: 'Literal', value: string }
-    | { type: 'Operator', value: string }
-    | { type: 'SpecialCharacter', value: SpecialCharacter };
+    | {type: 'KeyWord'; value: KeyWord}
+    | {type: 'Identifier'; value: string}
+    | {type: 'Literal'; value: string}
+    | {type: 'Operator'; value: string}
+    | {type: 'SpecialCharacter'; value: SpecialCharacter};
 
 export const keyWord = (value: KeyWord): Token => ({type: 'KeyWord', value});
 export const identifier = (value: string): Token => ({type: 'Identifier', value});

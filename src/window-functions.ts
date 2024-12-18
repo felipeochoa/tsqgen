@@ -7,8 +7,7 @@ type Undefined<T> = T extends undefined ? T : never;
 
 const define = <Args extends any[], Return>(name: string) =>
     (...args: {[I in keyof Args]: Undefined<Args[I]> | Expression<Defined<Args[I]>>}) =>
-    new PartialWindowCall<Return>(name, args);
-
+        new PartialWindowCall<Return>(name, args);
 
 // Aliases for documentation purposes only
 type BigInt = number;
