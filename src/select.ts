@@ -428,10 +428,10 @@ class SubqueryImpl<FromTuple, SelectTuple> {
 class WindowMaker<FromTuple, Next> {
     constructor(private name: string, private onFinish: (w: WindowState) => Next) {}
 
-    as(_: WindowParams<FromTuple>): Next;
-    as(existingWindowName: string, _: Omit<WindowParams<FromTuple>, 'partitionBy'>): Next;
+    as(params: WindowParams<FromTuple>): Next;
+    as(existingWindowName: string, params?: Omit<WindowParams<FromTuple>, 'partitionBy'>): Next;
     as(arg1: string | WindowParams<FromTuple>, arg2?: Omit<WindowParams<FromTuple>, 'partitionBy'>) {
-        const {frame, orderBy} = typeof arg1 === 'string' ? arg2! : arg1;
+        const {frame, orderBy} = typeof arg1 === 'string' ? (arg2 ?? {}) : arg1;
         const tuple = tupleMap<FromTuple>();
         const common = {name: this.name, orderBy: orderBy && resolveOrderArgs(orderBy(tuple)), frame};
         const window = typeof arg1 === 'string'

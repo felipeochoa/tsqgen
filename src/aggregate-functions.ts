@@ -1,5 +1,6 @@
 import {
-    Aggregate, Expression, JsonArrayAgg, JsonObjectAgg, OrderArg, OrderedSetAggregate, isExpression,
+    Aggregate, Expression, JsonArrayAgg, JsonObjectAgg, OrderArg, OrderedSetAggregate, UnknownExpr,
+    isFinalExpression,
 } from './expression';
 import { Json, Jsonb, MultiRange, Range, Xml } from './types';
 
@@ -13,13 +14,13 @@ const define = <Args extends unknown[], Return>(name: string) =>
 // https://www.postgresql.org/docs/current/functions-aggregate.html#FUNCTIONS-AGGREGATE-TABLE
 
 /** Returns an arbitrary value from the non-null input values. */
-export const anyValue: <T>(t: Expression<T>) => Expression<T> = define<[unknown], unknown>('any_value');
+export const anyValue = <T>(t: Expression<T>): Expression<T> => new Aggregate('any_value', [t]);
 
 /**
  * Collects all the input values, including nulls, into an array. Concatenates all the input arrays into an array
  * of one higher dimension. (Array inputs must all have the same dimensionality, and cannot be empty or null.)
  */
-export const arrayAgg: <T>(t: Expression<T>) => Expression<T[]> = define<[unknown], unknown[]>('array_agg');
+export const arrayAgg = <T>(t: Expression<T>): Expression<T[]> => new Aggregate('array_agg', [t]);
 
 /** Computes the average (arithmetic mean) of all the non-null input values. */
 export const avg = define<[number], number>('avg');
@@ -112,12 +113,11 @@ export const max = define<[number], number>('max');
 export const min = define<[number], number>('min');
 
 /** Computes the union of the non-null input values. */
-export const rangeAgg: <T>(r: Expression<Range<T>>) => Expression<MultiRange<T>>
-    = define<[Range<unknown>], MultiRange<unknown>>('range_agg');
+export const rangeAgg = <T>(r: Expression<Range<T>>): Expression<MultiRange<T>> => new Aggregate('range_agg', [r]);
 
 /** Computes the intersection of the non-null input values. */
-export const rangeIntersectAgg: <T>(r: Expression<Range<T>>) => Expression<Range<T>>
-    = define<[Range<unknown>], Range<unknown>>('range_intersect_agg');
+export const rangeIntersectAgg = <T>(r: Expression<Range<T>>): Expression<Range<T>> =>
+    new Aggregate('range_intersect_agg', [r]);
 
 /**
  * Collects all the input values, skipping nulls, into a JSON array. Values are converted to JSON as per to_json or
@@ -199,10 +199,10 @@ export const varSamp = define<[number], number>('var_samp');
 // https://www.postgresql.org/docs/current/functions-aggregate.html#FUNCTIONS-ORDEREDSET-TABLE
 
 class PartialOrderedSetAggregate<Args extends unknown[], Return> {
-    constructor(private functionName: string, private args: Expression<unknown>[]) {}
+    constructor(private functionName: string, private args: UnknownExpr[]) {}
 
     withinGroupOrderBy(elts: {[I in keyof Args]: OrderArg<Args[I]> | Expression<Args[I]>}) {
-        const orderBy = elts.map(elt => isExpression(elt) ? {expr: elt} : elt);
+        const orderBy = elts.map(elt => isFinalExpression(elt) ? {expr: elt} : elt);
         return new OrderedSetAggregate<Return>(this.functionName, this.args, orderBy);
     }
 }
@@ -214,39 +214,51 @@ class PartialOrderedSetAggregate<Args extends unknown[], Return> {
 export const mode = <T>() => new PartialOrderedSetAggregate<[T], T>('mode', []);
 
 /**
- * Computes continuous percentiles, with two variants, depending on whether the initial argument is a number or an
- * array.
+ * Computes continuous percentiles, with two variants. This variant takes a single number; see `percentileCont2`
+ * for the variant taking an array of numbers.
  *
  * Variant 1 (single number): Computes the continuous percentile, a value corresponding to the specified fraction
  * within the ordered set of aggregated argument values. This will interpolate between adjacent input items if
  * needed.
+ */
+export function percentileCont(fraction: Expression<number>): PartialOrderedSetAggregate<[number], number> {
+    return new PartialOrderedSetAggregate('percentile_cont', [fraction]);
+}
+
+/**
+ * Computes continuous percentiles, with two variants. This variant takes an array of numbers; see `percentileCont`
+ * for the variant taking a single number.
  *
  * Variant 2 (array): Computes multiple continuous percentiles. The result is an array of the same dimensions as
  * the fractions parameter, with each non-null element replaced by the (possibly interpolated) value corresponding
  * to that percentile.
  */
-export function percentileCont(fraction: Expression<number>): PartialOrderedSetAggregate<[number], number>;
-export function percentileCont(fractions: Expression<number[]>): PartialOrderedSetAggregate<[number], number[]>;
-export function percentileCont(fractions: Expression<unknown>): PartialOrderedSetAggregate<[number], unknown> {
-    return new PartialOrderedSetAggregate<[number], unknown>('percentile_cont', [fractions]);
+export function percentileCont2(fractions: Expression<number[]>): PartialOrderedSetAggregate<[number], number[]> {
+    return new PartialOrderedSetAggregate('percentile_cont', [fractions]);
 }
 
 /**
- * Computes discrete percentiles, with two variants, depending on whether the initial argument is a number or an
- * array.
+ * Computes discrete percentiles, with two variants. This variant takes a single number; see `percentileDisc2`
+ * for the variant taking an array of numbers.
  *
  * Variant 1 (single number): Computes the discrete percentile, the first value within the ordered set of
  * aggregated argument values whose position in the ordering equals or exceeds the specified fraction. The
  * aggregated argument must be of a sortable type.
+ */
+export function percentileDisc<T>(fraction: Expression<number>): PartialOrderedSetAggregate<[T], T> {
+    return new PartialOrderedSetAggregate('percentile_disc', [fraction]);
+}
+
+/**
+ * Computes discrete percentiles, with two variants. This variant takes an array of numbers; see `percentileDisc`
+ * for the variant taking a single number.
  *
  * Variant 2 (array): Computes multiple discrete percentiles. The result is an array of the same dimensions as the
  * fractions parameter, with each non-null element replaced by the input value corresponding to that
  * percentile. The aggregated argument must be of a sortable type.
  */
-export function percentileDisc<T>(fraction: Expression<number>): PartialOrderedSetAggregate<[T], T>;
-export function percentileDisc<T>(fractions: Expression<number[]>): PartialOrderedSetAggregate<[T], T[]>;
-export function percentileDisc<T>(fractions: Expression<unknown>): PartialOrderedSetAggregate<[T], unknown> {
-    return new PartialOrderedSetAggregate<[T], unknown>('percentile_disc', [fractions]);
+export function percentileDisc2<T>(fractions: Expression<number[]>): PartialOrderedSetAggregate<[T], T[]> {
+    return new PartialOrderedSetAggregate('percentile_disc', [fractions]);
 }
 
 // https://www.postgresql.org/docs/current/functions-aggregate.html#FUNCTIONS-HYPOTHETICAL-TABLE

@@ -2,13 +2,17 @@ import * as quote from './quote';
 import {
     Serializable, Token, commaSeparate, identifier, keyWord, literal, operator, specialCharacter,
 } from './serialize';
-import { Subquery, Tuple } from './select-types';
+import { Subquery } from './select-types';
 import { Json, SQL } from './types';
 
 // Expression syntax taken from https://www.postgresql.org/docs/current/sql-expressions.html
 
 export type Order = {key: 'ASC'} | {key: 'DESC'} | {key: 'USING'; op: string};
-export type OrderArg<T = unknown> = {expr: FinalExpression<T>; order?: Order; nulls?: 'NULLS FIRST' | 'NULLS LAST'};
+export interface OrderArg<T = unknown> {
+    expr: FinalExpression<T>;
+    order?: Order;
+    nulls?: 'NULLS FIRST' | 'NULLS LAST';
+}
 
 declare const __brand: unique symbol;
 const expressionTag = Symbol();
@@ -266,7 +270,7 @@ export const not = (arg: Expression<boolean>): Expression<boolean> => new Prefix
 
 /** Aggregates not using WITHIN GROUP. */
 export class Aggregate<T> extends BaseExpr<T> {
-    constructor(private functionName: string, private args: Expression<unknown>[], private doDistinct?: boolean,
+    constructor(private functionName: string, private args: UnknownExpr[], private doDistinct?: boolean,
                 private order?: OrderArg[], private filter?: Expression<boolean>) {
         if (args.length === 0) {
             if (order) throw new Error(`${functionName}(*) cannot specify an ORDER BY clause`);
@@ -403,7 +407,7 @@ export class JsonArrayAgg<T> extends BaseExpr<Json> {
 
 /** Aggregates using WITHIN GROUP */
 export class OrderedSetAggregate<T> extends BaseExpr<T> {
-    constructor(private functionName: string, private args: Expression<unknown>[], private order: OrderArg[],
+    constructor(private functionName: string, private args: UnknownExpr[], private order: OrderArg[],
                 private filter?: Expression<boolean>) {
         super();
     }

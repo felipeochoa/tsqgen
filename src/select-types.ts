@@ -64,8 +64,8 @@ type GroupedFilteredSubq<FromTuple, SelectTuple, AllowLock> = UnitSubq<FromTuple
 
 interface WindowMaker<FromTuple, SelectTuple, AllowLock> {
     as: {
-        (_: WindowParams<FromTuple>): GroupedFilteredSubq<FromTuple, SelectTuple, AllowLock>;
-        (existingWindowName: string, _?: Omit<WindowParams<FromTuple>, 'partitionBy'>):
+        (params: WindowParams<FromTuple>): GroupedFilteredSubq<FromTuple, SelectTuple, AllowLock>;
+        (existingWindowName: string, params?: Omit<WindowParams<FromTuple>, 'partitionBy'>):
         GroupedFilteredSubq<FromTuple, SelectTuple, AllowLock>;
     };
 }
