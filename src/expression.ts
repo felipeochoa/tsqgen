@@ -1,4 +1,3 @@
-import * as quote from './quote';
 import {
     Serializable, Token, commaSeparate, identifier, keyWord, literal, operator, specialCharacter,
 } from './serialize';
@@ -174,7 +173,7 @@ class Constant<T extends string | number | boolean | null> extends BaseExpr<T> {
     }
 
     serialize(): Token[] {
-        return [literal(quote.literal(this.value))];
+        return [literal(this.value)];
     }
 }
 
@@ -189,7 +188,7 @@ class Identifier<T> extends BaseExpr<T> {
     }
 
     serialize(): Token[] {
-        return [identifier(quote.identifier(this.name))];
+        return [identifier(this.name)];
     }
 }
 
@@ -270,7 +269,7 @@ class FuncExpr<T> extends BaseExpr<T> {
     }
 
     serialize(): Token[] {
-        const fn = quote.identifier(this.functionName);
+        const fn = this.functionName;
         const values = this.args.map(arg => arg.serialize());
         return [
             identifier(fn),
@@ -314,7 +313,7 @@ export class Aggregate<T> extends BaseExpr<T> {
     // the call https://www.postgresql.org/docs/current/functions-window.html
 
     serialize(): Token[] {
-        const fn = quote.identifier(this.functionName);
+        const fn = this.functionName;
         const args = serializeArgs(this.args);
         const filter = serializeFilterWhere(this.filter);
         const distinct = this.doDistinct ? [keyWord('DISTINCT')] : [];
@@ -434,7 +433,7 @@ export class OrderedSetAggregate<T> extends BaseExpr<T> {
     }
 
     serialize(): Token[] {
-        const fn = quote.identifier(this.functionName);
+        const fn = this.functionName;
         const args = serializeArgs(this.args);
         const filter = serializeFilterWhere(this.filter);
         const orderBy = serializeOrderBy(this.order);
@@ -468,7 +467,7 @@ class WindowCall<T> extends BaseExpr<T> {
     }
 
     serialize(): Token[] {
-        const fn = quote.identifier(this.functionName);
+        const fn = this.functionName;
         const args = serializeArgs(this.args);
         const filter = serializeFilterWhere(this.filter);
         return [
@@ -546,9 +545,9 @@ class Field<T> extends BaseExpr<T> {
 
     serialize(): Token[] {
         return [
-            identifier(quote.tableName(this.tableName)),
+            identifier(this.tableName),
             specialCharacter('.'),
-            identifier(quote.columnName(this.name)),
+            identifier(this.name),
         ];
     }
 }

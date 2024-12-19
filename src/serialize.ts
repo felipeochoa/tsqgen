@@ -1,3 +1,4 @@
+import * as quote from './quote';
 import { assertNever } from './utils';
 
 // https://www.postgresql.org/docs/current/sql-syntax-lexical.html
@@ -26,24 +27,24 @@ function unlex1(token: Token) {
     switch (token.type) {
         case 'KeyWord':
         case 'Identifier':
-            return token.value;
+            return quote.identifier(token.value);
         case 'Literal': {
             const value = token.value;
             if (typeof value === 'string') {
-                return `'${value}'`;
+                return quote.string(value);
             } else if (value === null || typeof value === 'boolean') {
                 return '' + value;
             } else if (typeof value === 'number') {
-                return isFinite(value) ? value.toString() : `'${value}'`;
+                return isFinite(value) ? value.toString() : quote.string(value.toString());
             }
             assertNever(value, 'Unexpected literal of type ' + typeof value);
         }
         case 'Operator':
-            return token.value;
+            return quote.operator(token.value);
         case 'SpecialCharacter':
             return token.value;
         case 'ColumnReference':
-            return `${token.tableName}.${token.columnName}`;
+            return `${quote.tableName(token.tableName)}.${quote.columnName(token.columnName)}`;
     }
 }
 
