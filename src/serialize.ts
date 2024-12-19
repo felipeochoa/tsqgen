@@ -27,6 +27,8 @@ export function unlex(tokens: Token[]): string {
                 return token.value;
             case 'SpecialCharacter':
                 return token.value;
+            case 'ColumnReference':
+                return `${token.tableName}.${token.columnName}`;
         }
     }).join(' ');
 }
@@ -45,13 +47,19 @@ export type Token =
     | {type: 'Identifier'; value: string}
     | {type: 'Literal'; value: string | number | boolean | null}
     | {type: 'Operator'; value: string}
-    | {type: 'SpecialCharacter'; value: SpecialCharacter};
+    | {type: 'SpecialCharacter'; value: SpecialCharacter}
+    | {type: 'ColumnReference'; tableName: string; columnName: string};
 
 export const keyWord = (value: KeyWord): Token => ({type: 'KeyWord', value});
 export const identifier = (value: string): Token => ({type: 'Identifier', value});
 export const literal = (value: string | number | boolean | null): Token => ({type: 'Literal', value});
 export const operator = (value: string): Token => ({type: 'Operator', value});
 export const specialCharacter = (value: SpecialCharacter): Token => ({type: 'SpecialCharacter', value});
+export const columnReference = (tableName: string, columnName: string): Token => ({
+    type: 'ColumnReference',
+    tableName,
+    columnName,
+});
 
 type SpecialCharacter = '(' | ')' | '[' | ']' | '*' | ',' | '.' | ':';
 

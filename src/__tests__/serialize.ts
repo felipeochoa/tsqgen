@@ -1,4 +1,6 @@
-import { Token, commaSeparate, unlex, keyWord, identifier, literal, operator, specialCharacter } from '../serialize';
+import {
+    Token, columnReference, commaSeparate, identifier, keyWord, literal, operator, specialCharacter, unlex,
+} from '../serialize';
 
 describe('unlex', () => {
     test('KeyWord Tokens', () => {
@@ -44,6 +46,11 @@ describe('unlex', () => {
     test('SpecialCharacter Tokens', () => {
         const tokens: Token[] = [specialCharacter('(')];
         expect(unlex(tokens)).toBe('(');
+    });
+
+    test('ColumnReference Tokens', () => {
+        const tokens: Token[] = [columnReference('users', 'id')];
+        expect(unlex(tokens)).toBe('users.id');
     });
 
     test('Mixed Tokens', () => {
