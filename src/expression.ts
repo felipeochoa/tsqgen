@@ -117,14 +117,10 @@ abstract class BaseExpr<T> implements Expression<T> {
         return new InfixExpr(this, 'NOT IN', new SubqueryExpr(arg1));
     }
     any(operator: string, arrayExpr: Expression<T[]> | SingleTypeSubquery<T>): Expression<boolean> {
-        const op = quote.operator(operator) + ' ANY';
-        if (isExpression(arrayExpr)) return new MultiOperandExpr(this, op, [arrayExpr]);
-        return new InfixExpr(this, op, new SubqueryExpr(arrayExpr));
+        return new AnyOrAllExpr(this, operator, arrayExpr, 'ANY');
     }
     all(operator: string, arrayExpr: Expression<T[]> | SingleTypeSubquery<T>): Expression<boolean> {
-        const op = quote.operator(operator) + ' ALL';
-        if (isExpression(arrayExpr)) return new MultiOperandExpr(this, op, [arrayExpr]);
-        return new InfixExpr(this, op, new SubqueryExpr(arrayExpr));
+        return new AnyOrAllExpr(this, operator, arrayExpr, 'ALL');
     }
 
     asc(nulls?: 'NULLS FIRST' | 'NULLS LAST'): OrderArg<T>
@@ -135,6 +131,27 @@ abstract class BaseExpr<T> implements Expression<T> {
         { return {expr: this, order: {key: 'USING', op}, nulls}; }
 
     abstract serialize(): Token[];
+}
+
+class AnyOrAllExpr<L, T> extends BaseExpr<boolean> {
+    constructor(private left: Expression<L>, private op: string, private arrayExpr: Expression<T[]> | SingleTypeSubquery<T>, private keyword: 'ANY' | 'ALL') {
+        super();
+    }
+
+    serialize(): Token[] {
+        return [
+            specialCharacter('('),
+            ...this.left.serialize(),
+            operator(this.op),
+            keyWord(this.keyword),
+            specialCharacter('('),
+            ...(isExpression(this.arrayExpr)
+                ? this.arrayExpr.serialize()
+                : [specialCharacter('('), ...this.arrayExpr.serialize(), specialCharacter(')')]),
+            specialCharacter(')'),
+            specialCharacter(')'),
+        ];
+    }
 }
 
 export class SubqueryExpr<Value> extends BaseExpr<Value> {
@@ -151,7 +168,7 @@ export class SubqueryExpr<Value> extends BaseExpr<Value> {
     }
 }
 
-class Constant<T> extends BaseExpr<T> {
+class Constant<T extends string | number | boolean | null> extends BaseExpr<T> {
     constructor(private value: T) {
         super();
     }

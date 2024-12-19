@@ -82,6 +82,7 @@ type KeyWord =
     | 'ABSENT'
     | 'ALL'
     | 'AND'
+    | 'ANY'
     | 'ARRAY'
     | 'AS'
     | 'ASC'
