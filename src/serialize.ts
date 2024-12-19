@@ -1,3 +1,5 @@
+import { assertNever } from './utils';
+
 // https://www.postgresql.org/docs/current/sql-syntax-lexical.html
 
 export interface Serializable {
@@ -10,8 +12,17 @@ export function unlex(tokens: Token[]): string {
             case 'KeyWord':
             case 'Identifier':
                 return token.value;
-            case 'Literal':
-                return `'${token.value}'`;
+            case 'Literal': {
+                const value = token.value;
+                if (typeof value === 'string') {
+                    return `'${value}'`;
+                } else if (value === null || typeof value === 'boolean') {
+                    return '' + value;
+                } else if (typeof value === 'number') {
+                    return isFinite(value) ? value.toString() : `'${value}'`;
+                }
+                assertNever(value, 'Unexpected literal of type ' + typeof value);
+            }
             case 'Operator':
                 return token.value;
             case 'SpecialCharacter':
@@ -32,13 +43,13 @@ export function commaSeparate(args: readonly Token[][]): Token[] {
 export type Token =
     | {type: 'KeyWord'; value: KeyWord}
     | {type: 'Identifier'; value: string}
-    | {type: 'Literal'; value: string}
+    | {type: 'Literal'; value: string | number | boolean | null}
     | {type: 'Operator'; value: string}
     | {type: 'SpecialCharacter'; value: SpecialCharacter};
 
 export const keyWord = (value: KeyWord): Token => ({type: 'KeyWord', value});
 export const identifier = (value: string): Token => ({type: 'Identifier', value});
-export const literal = (value: string): Token => ({type: 'Literal', value});
+export const literal = (value: string | number | boolean | null): Token => ({type: 'Literal', value});
 export const operator = (value: string): Token => ({type: 'Operator', value});
 export const specialCharacter = (value: SpecialCharacter): Token => ({type: 'SpecialCharacter', value});
 

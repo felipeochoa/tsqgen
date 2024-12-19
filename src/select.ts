@@ -6,6 +6,7 @@ import {
 } from './select-types';
 import { Token, commaSeparate, identifier, keyWord, literal, specialCharacter } from './serialize';
 import { SQL } from './types';
+import { assertNever } from './utils';
 
 // https://www.postgresql.org/docs/current/sql-select.html
 
@@ -513,8 +514,4 @@ function serializeOrderArg(arg: OrderArg): Token[] {
     else if (arg.order) ret.push(keyWord(arg.order.key));
     if (arg.nulls) ret.push(keyWord(arg.nulls));
     return ret;
-}
-
-function assertNever(_: never, msg: string): never { // Useful for Typescript exhaustiveness checks
-    throw new Error(msg);
 }

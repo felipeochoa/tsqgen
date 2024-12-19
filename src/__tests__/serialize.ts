@@ -6,6 +6,26 @@ describe('unlex', () => {
         expect(unlex(tokens)).toBe('SELECT');
     });
 
+    test('Literal Tokens with Number', () => {
+        const tokens: Token[] = [literal(42)];
+        expect(unlex(tokens)).toBe('42');
+    });
+
+    test('Literal Tokens with Boolean', () => {
+        const tokens: Token[] = [literal(true)];
+        expect(unlex(tokens)).toBe('true');
+    });
+
+    test('Literal Tokens with Null', () => {
+        const tokens: Token[] = [literal(null)];
+        expect(unlex(tokens)).toBe('null');
+    });
+
+    test('Literal Tokens with Non-finite Number', () => {
+        const tokens: Token[] = [literal(Infinity)];
+        expect(unlex(tokens)).toBe("'Infinity'");
+    });
+
     test('Identifier Tokens', () => {
         const tokens: Token[] = [identifier('my_table')];
         expect(unlex(tokens)).toBe('my_table');

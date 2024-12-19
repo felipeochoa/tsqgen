@@ -85,6 +85,7 @@ export default tseslint.config(
             eqeqeq: ['error', 'always', {null: 'ignore'}],
             'max-classes-per-file': 'off',
             'no-bitwise': 'off',
+            'no-fallthrough': 'off', // This is better handled by typescript
             'no-unused-expressions': ['error', {
                 allowShortCircuit: true,
                 allowTernary: true,
