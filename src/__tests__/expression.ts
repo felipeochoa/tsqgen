@@ -4,24 +4,24 @@ import { Serializable, unlex } from '../serialize';
 describe('BaseExpr', () => {
     it('.isNull()', () => {
         const expr = constant('abc').isNull();
-        expectStringifyToBe(expr, "( 'abc' IS NULL )");
+        expectStringifyToBe(expr, "('abc' IS NULL)");
     });
 
     it('.isNotNull()', () => {
         const expr = constant('abc').isNotNull();
-        expectStringifyToBe(expr, "( 'abc' IS NOT NULL )");
+        expectStringifyToBe(expr, "('abc' IS NOT NULL)");
     });
 
     it('.or()', () => {
         const expr1 = constant<boolean>(true);
         const expr2 = constant<boolean>(false);
-        expectStringifyToBe(expr1.or(expr2), "( 'true' OR 'false' )");
+        expectStringifyToBe(expr1.or(expr2), "('true' OR 'false')");
     });
 
     it('.and()', () => {
         const expr1 = constant<boolean>(true);
         const expr2 = constant<boolean>(false);
-        expectStringifyToBe(expr1.and(expr2), "( 'true' AND 'false' )");
+        expectStringifyToBe(expr1.and(expr2), "('true' AND 'false')");
     });
 
     it('.isDistinctFrom()', () => {

@@ -7,30 +7,44 @@ export interface Serializable {
 }
 
 export function unlex(tokens: Token[]): string {
-    return tokens.map((token): string => {
-        switch (token.type) {
-            case 'KeyWord':
-            case 'Identifier':
-                return token.value;
-            case 'Literal': {
-                const value = token.value;
-                if (typeof value === 'string') {
-                    return `'${value}'`;
-                } else if (value === null || typeof value === 'boolean') {
-                    return '' + value;
-                } else if (typeof value === 'number') {
-                    return isFinite(value) ? value.toString() : `'${value}'`;
-                }
-                assertNever(value, 'Unexpected literal of type ' + typeof value);
+    return tokens.reduce((acc, token, index) => {
+        const nextToken = tokens[index + 1];
+        const result = unlex1(token);
+
+        const needsSpaceAfter = nextToken && !(
+            (token.type === 'SpecialCharacter' && token.value === '(')
+            || (token.type === 'Identifier' && nextToken.type === 'SpecialCharacter' && nextToken.value === '(')
+            || (nextToken.type === 'SpecialCharacter' && nextToken.value === ')')
+            || (nextToken.type === 'SpecialCharacter' && nextToken.value === ',')
+        );
+
+        return acc + result + (needsSpaceAfter ? ' ' : '');
+    }, '');
+}
+
+function unlex1(token: Token) {
+    switch (token.type) {
+        case 'KeyWord':
+        case 'Identifier':
+            return token.value;
+        case 'Literal': {
+            const value = token.value;
+            if (typeof value === 'string') {
+                return `'${value}'`;
+            } else if (value === null || typeof value === 'boolean') {
+                return '' + value;
+            } else if (typeof value === 'number') {
+                return isFinite(value) ? value.toString() : `'${value}'`;
             }
-            case 'Operator':
-                return token.value;
-            case 'SpecialCharacter':
-                return token.value;
-            case 'ColumnReference':
-                return `${token.tableName}.${token.columnName}`;
+            assertNever(value, 'Unexpected literal of type ' + typeof value);
         }
-    }).join(' ');
+        case 'Operator':
+            return token.value;
+        case 'SpecialCharacter':
+            return token.value;
+        case 'ColumnReference':
+            return `${token.tableName}.${token.columnName}`;
+    }
 }
 
 export function commaSeparate(args: readonly Token[][]): Token[] {
