@@ -41,6 +41,7 @@ export interface Expression<T> {
     isDistinctFrom: (other: Expression<T>) => Expression<boolean>;
     isNotDistinctFrom: (other: Expression<T>) => Expression<boolean>;
     eq: (other: Expression<T>) => Expression<boolean>;
+    ne: (other: Expression<T>) => Expression<boolean>;
     lt: (this: Expression<T & number>, other: Expression<T>) => Expression<boolean>;
     le: (this: Expression<T & number>, other: Expression<T>) => Expression<boolean>;
     gt: (this: Expression<T & number>, other: Expression<T>) => Expression<boolean>;
@@ -84,7 +85,7 @@ abstract class BaseExpr<T> implements Expression<T> {
     isNotDistinctFrom(other: Expression<T>): Expression<boolean>
         { return new InfixExpr(this, 'IS NOT DISTINCT FROM', other); }
     eq(other: Expression<T>): Expression<boolean> { return new InfixExpr(this, '=', other); }
-    ne(other: Expression<unknown>): Expression<boolean> { return new InfixExpr(this, '<>', other); }
+    ne(other: Expression<T>): Expression<boolean> { return new InfixExpr(this, '<>', other); }
     lt(this: Expression<T & number>, other: Expression<T>): Expression<boolean>
         { return new InfixExpr(this, '<', other); }
     le(this: Expression<T & number>, other: Expression<T>): Expression<boolean>
