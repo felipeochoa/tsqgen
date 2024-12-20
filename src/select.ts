@@ -1,4 +1,4 @@
-import { Expression, OrderArg, SubqueryExpr, UnknownExpr, constant, field, isFinalExpression } from './expression';
+import { Expression, OrderArg, SubqueryExpr, UnknownExpr, field, isFinalExpression, number } from './expression';
 import * as quote from './quote';
 import {
     FrameRef, From, GroupingTree, Nullable, RollupArgs, SelectFrom, Subquery, Tuple, TupleMap, UnitSubq,
@@ -337,11 +337,11 @@ class SubqueryImpl<FromTuple, SelectTuple> {
         { return this.update({orderBy: resolveOrderArgs(order(tupleMap()))}); }
 
     offset(offset: number | Expression<number>)
-        { return this.update({offset: typeof offset === 'number' ? constant(offset) : offset}); }
+        { return this.update({offset: typeof offset === 'number' ? number(offset) : offset}); }
     limit(limit: number | Expression<number> | 'ALL')
-        { return this.update({limit: typeof limit === 'number' ? constant(limit) : limit}); }
+        { return this.update({limit: typeof limit === 'number' ? number(limit) : limit}); }
     fetch(fetch: number | Expression<number>, ties?: 'WITH TIES') {
-        if (typeof fetch === 'number') fetch = constant(fetch);
+        if (typeof fetch === 'number') fetch = number(fetch);
         const withTies = ties === 'WITH TIES';
         return this.update({fetch: {fetch, withTies}});
     }

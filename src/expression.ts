@@ -173,7 +173,7 @@ export class SubqueryExpr<Value> extends BaseExpr<Value> {
     }
 }
 
-class Constant<T extends string | number | boolean | null> extends BaseExpr<T> {
+class Constant<T extends string | number | boolean | null> extends BaseExpr<Widen<T>> {
     constructor(private value: T) {
         super();
     }
@@ -183,10 +183,18 @@ class Constant<T extends string | number | boolean | null> extends BaseExpr<T> {
     }
 }
 
-type StaticStringsOnly<T> = T extends string ? (string extends T ? never : T) : T;
+type Widen<T> = T extends string ? string : T extends number ? number : T extends boolean ? boolean : T;
+type StaticValuesOnly<T>
+    = T extends string ? (string extends T ? never : T)
+    : T extends number ? (number extends T ? never : T)
+    : T extends boolean ? (boolean extends T ? never : T)
+    : T extends null ? T
+    : never;
 
-export const constant = <T extends string | number | boolean | null>(value: StaticStringsOnly<T>): Expression<T> =>
+export const constant = <T extends string | number | boolean | null>(value: StaticValuesOnly<T>): Expression<Widen<T>> =>
     new Constant(value as T);
+
+export const number = (value: number): Expression<number> => new Constant(value);
 
 class Identifier<T> extends BaseExpr<T> {
     constructor(private name: string) {

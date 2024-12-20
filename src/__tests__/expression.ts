@@ -13,74 +13,74 @@ describe('BaseExpr', () => {
     });
 
     it('.or()', () => {
-        const expr1 = constant<boolean>(true);
-        const expr2 = constant<boolean>(false);
+        const expr1 = constant(true);
+        const expr2 = constant(false);
         expectStringifyToBe(expr1.or(expr2), "(true OR false)");
     });
 
     it('.and()', () => {
-        const expr1 = constant<boolean>(true);
-        const expr2 = constant<boolean>(false);
+        const expr1 = constant(true);
+        const expr2 = constant(false);
         expectStringifyToBe(expr1.and(expr2), "(true AND false)");
     });
 
     it('.isDistinctFrom()', () => {
-        const expr1 = constant<number>(1);
-        const expr2 = constant<number>(2);
+        const expr1 = constant(1);
+        const expr2 = constant(2);
         expectStringifyToBe(expr1.isDistinctFrom(expr2), "(1 IS DISTINCT FROM 2)");
     });
 
     it('.isNotDistinctFrom()', () => {
-        const expr1 = constant<number>(1);
-        const expr2 = constant<number>(2);
+        const expr1 = constant(1);
+        const expr2 = constant(2);
         expectStringifyToBe(expr1.isNotDistinctFrom(expr2), "(1 IS NOT DISTINCT FROM 2)");
     });
 
     it('.eq()', () => {
-        const expr1 = constant<number>(1);
-        const expr2 = constant<number>(1);
+        const expr1 = constant(1);
+        const expr2 = constant(1);
         expectStringifyToBe(expr1.eq(expr2), "(1 = 1)");
     });
 
     it('.ne()', () => {
-        const expr1 = constant<number>(1);
-        const expr2 = constant<number>(2);
+        const expr1 = constant(1);
+        const expr2 = constant(2);
         expectStringifyToBe(expr1.ne(expr2), "(1 <> 2)");
     });
 
     it('.lt()', () => {
-        const expr1 = constant<number>(1);
-        const expr2 = constant<number>(2);
+        const expr1 = constant(1);
+        const expr2 = constant(2);
         expectStringifyToBe(expr1.lt(expr2), "(1 < 2)");
     });
 
     it('.le()', () => {
-        const expr1 = constant<number>(1);
-        const expr2 = constant<number>(2);
+        const expr1 = constant(1);
+        const expr2 = constant(2);
         expectStringifyToBe(expr1.le(expr2), "(1 <= 2)");
     });
 
     it('.gt()', () => {
-        const expr1 = constant<number>(2);
-        const expr2 = constant<number>(1);
+        const expr1 = constant(2);
+        const expr2 = constant(1);
         expectStringifyToBe(expr1.gt(expr2), "(2 > 1)");
     });
 
     it('.ge()', () => {
-        const expr1 = constant<number>(2);
-        const expr2 = constant<number>(1);
+        const expr1 = constant(2);
+        const expr2 = constant(1);
         expectStringifyToBe(expr1.ge(expr2), "(2 >= 1)");
     });
 
     it('.like()', () => {
-        const expr1 = constant<string>('abc');
-        const expr2 = constant<string>('%b%');
+        const expr1 = constant('abc');
+        const expr2 = constant('%b%');
         expectStringifyToBe(expr1.like(expr2), "('abc' LIKE '%b%')");
     });
 
     it('.ilike()', () => {
-        const expr1 = constant<string>('abc');
-        const expr2 = constant<string>('%B%');
+        const expr1 = constant('abc');
+        const expr2 = constant('%B%');
         expectStringifyToBe(expr1.ilike(expr2), "('abc' ILIKE '%B%')");
     });
 
