@@ -15,13 +15,13 @@ describe('BaseExpr', () => {
     it('.or()', () => {
         const expr1 = constant<boolean>(true);
         const expr2 = constant<boolean>(false);
-        expectStringifyToBe(expr1.or(expr2), "('true' OR 'false')");
+        expectStringifyToBe(expr1.or(expr2), "(true OR false)");
     });
 
     it('.and()', () => {
         const expr1 = constant<boolean>(true);
         const expr2 = constant<boolean>(false);
-        expectStringifyToBe(expr1.and(expr2), "('true' AND 'false')");
+        expectStringifyToBe(expr1.and(expr2), "(true AND false)");
     });
 
     it('.isDistinctFrom()', () => {
