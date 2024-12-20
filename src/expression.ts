@@ -133,7 +133,12 @@ abstract class BaseExpr<T> implements Expression<T> {
 }
 
 class AnyOrAllExpr<L, T> extends BaseExpr<boolean> {
-    constructor(private left: Expression<L>, private op: string, private arrayExpr: Expression<T[]> | SingleTypeSubquery<T>, private keyword: 'ANY' | 'ALL') {
+    constructor(
+        private left: Expression<L>,
+        private op: string,
+        private arrayExpr: Expression<T[]> | SingleTypeSubquery<T>,
+        private keyword: 'ANY' | 'ALL',
+    ) {
         super();
     }
 

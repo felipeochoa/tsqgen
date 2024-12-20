@@ -6,6 +6,7 @@ import tseslint from 'typescript-eslint';
 const lintWithTypes = process.env.LINT_WITH_TYPES === 'true';
 
 export default tseslint.config(
+    {ignores: ["build/*"]},
     eslint.configs.recommended,
     tseslint.configs.recommended,
     tseslint.configs.strict,
@@ -15,7 +16,6 @@ export default tseslint.config(
         jsx: false,
     }),
     {
-        ignores: ["build/*"],
         rules: {
             '@stylistic/arrow-parens': 'off',
             '@stylistic/block-spacing': 'off',
