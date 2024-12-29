@@ -1,5 +1,6 @@
 import { constant } from '../expression';
 import { Serializable, unlex } from '../serialize';
+import { boolean } from '../types';
 
 describe('BaseExpr', () => {
     it('.isNull()', () => {
@@ -84,10 +85,23 @@ describe('BaseExpr', () => {
         expectStringifyToBe(expr1.ilike(expr2), "('abc' ILIKE '%B%')");
     });
 
-    // - COLLATE operation
-    // - type casting
-    // - handle IN operation with values
-    // - handle IN operation with subquery
+    it('.collate()', () => {
+        const expr = constant('abc').collate('en_US');
+        expectStringifyToBe(expr, `('abc' COLLATE "en_US")`);
+    });
+
+    it('.castAs()', () => {
+        const expr = constant(1).castAs(boolean);
+        expectStringifyToBe(expr, "CAST(1 AS boolean)");
+    });
+
+    it('.in() with values', () => {
+        const expr = constant(1).in(constant(1), constant(2), constant(3));
+        expectStringifyToBe(expr, "(1 IN (1, 2, 3))");
+    });
+
+    it.todo('.in() with subquery');
+
     // - handle NOT IN operation with values
     // - handle NOT IN operation with subquery
     // - handle ANY operation

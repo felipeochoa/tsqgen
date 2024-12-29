@@ -244,13 +244,11 @@ class InfixExpr<L, R, T> extends BaseExpr<T> {
     }
 
     serialize(): Token[] {
-        const left = this.left.serialize();
-        const right = this.right.serialize();
         return [
             specialCharacter('('),
-            ...left,
-            identifier(this.op),
-            ...right,
+            ...this.left.serialize(),
+            operator(this.op),
+            ...this.right.serialize(),
             specialCharacter(')'),
         ];
     }
