@@ -1,4 +1,4 @@
-import { constant } from '../expression';
+import { array, constant } from '../expression';
 import { Serializable, unlex } from '../serialize';
 import { boolean } from '../types';
 
@@ -102,13 +102,32 @@ describe('BaseExpr', () => {
 
     it.todo('.in() with subquery');
 
-    // - handle NOT IN operation with values
-    // - handle NOT IN operation with subquery
-    // - handle ANY operation
-    // - handle ALL operation
-    // - handle ASC order
-    // - handle DESC order
-    // - handle USING order
+    it('.notIn() with values', () => {
+        const expr = constant(1).notIn(constant(1), constant(2), constant(3));
+        expectStringifyToBe(expr, "(1 NOT IN (1, 2, 3))");
+    });
+
+    it.todo('.notIn() with subquery');
+
+    it('.any()', () => {
+        const expr = constant(1).any('=', array(constant(1), constant(2), constant(3)));
+        expectStringifyToBe(expr, "(1 = ANY(ARRAY[1, 2, 3]))");
+    });
+
+    it.todo('.any() with subquery');
+
+    it('.all()', () => {
+        const expr = constant(1).all('<>', array(constant(1), constant(2), constant(3)));
+        expectStringifyToBe(expr, "(1 <> ALL(ARRAY[1, 2, 3]))");
+    });
+
+    it.todo('.all() with subquery');
+
+    it.todo('.asc()');
+
+    it.todo('.desc()');
+
+    it.todo('.using()');
 });
 
 // ### Constant Tests
