@@ -181,7 +181,7 @@ class Table<Alias extends string, RowType> extends BaseFrom<Record<Alias, RowTyp
     }
 
     serialize(): Token[] {
-        if (this.realName === this.alias) return [identifier(quote.tableName(this.alias))];
+        if (this.realName === this.alias) return [identifier(this.alias)];
         return [
             identifier(this.realName),
             keyWord('AS'),
@@ -400,7 +400,7 @@ class SubqueryImpl<FromTuple, SelectTuple> {
         parts.push(...this.serializeLimits());
         for (const {strength, block, tables} of this.state.locks) {
             parts.push(keyWord('FOR'), keyWord(strength));
-            if (tables !== undefined) parts.push(keyWord('OF'), ...tables.map(quote.tableName).map(identifier));
+            if (tables !== undefined) parts.push(keyWord('OF'), ...tables.map(identifier));
             if (block !== undefined) parts.push(keyWord(block));
         }
         return parts;

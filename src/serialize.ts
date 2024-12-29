@@ -15,6 +15,7 @@ export function unlex(tokens: Token[]): string {
         const needsSpaceAfter = nextToken && !(
             (token.type === 'SpecialCharacter' && token.value === '(')
             || (token.type === 'Identifier' && nextToken.type === 'SpecialCharacter' && nextToken.value === '(')
+            || (token.type === 'KeyWord' && token.value === 'CAST')
             || (nextToken.type === 'SpecialCharacter' && nextToken.value === ')')
             || (nextToken.type === 'SpecialCharacter' && nextToken.value === ',')
         );
@@ -26,6 +27,7 @@ export function unlex(tokens: Token[]): string {
 function unlex1(token: Token) {
     switch (token.type) {
         case 'KeyWord':
+            return token.value;
         case 'Identifier':
             return quote.identifier(token.value);
         case 'Literal': {
@@ -44,7 +46,7 @@ function unlex1(token: Token) {
         case 'SpecialCharacter':
             return token.value;
         case 'ColumnReference':
-            return `${quote.tableName(token.tableName)}.${quote.columnName(token.columnName)}`;
+            return `${quote.identifier(token.tableName)}.${quote.identifier(token.columnName)}`;
     }
 }
 
