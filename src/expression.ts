@@ -2,7 +2,7 @@ import {
     Serializable, Token, commaSeparate, identifier, keyWord, literal, operator, specialCharacter,
 } from './serialize';
 import { Subquery } from './select-types';
-import { Json, SQL } from './types';
+import { Json, SQL, SqlType } from './types';
 
 // Expression syntax taken from https://www.postgresql.org/docs/current/sql-expressions.html
 
@@ -49,7 +49,7 @@ export interface Expression<T> {
     like: (this: Expression<T & string>, other: Expression<string>) => Expression<boolean>;
     ilike: (this: Expression<T & string>, other: Expression<string>) => Expression<boolean>;
     collate: (this: Expression<T & string>, collation: string) => Expression<string>;
-    castAs: <T2>(typeName: string) => Expression<T2>;
+    castAs: <T2>(type: SqlType<T2>) => Expression<T2>;
     in: ((...values: Expression<T>[]) => Expression<boolean>)
         & ((subquery: SingleTypeSubquery<T>) => Expression<boolean>);
     notIn: ((...values: Expression<T>[]) => Expression<boolean>)
@@ -100,8 +100,8 @@ abstract class BaseExpr<T> implements Expression<T> {
         { return new InfixExpr(this, 'ILIKE', other); }
     collate(this: Expression<T & string>, collation: string): Expression<string>
         { return new InfixExpr(this, 'COLLATE', new Identifier(collation)); }
-    castAs<T2>(typeName: string): Expression<T2>
-        { return new Cast(this, typeName); }
+    castAs<T2>(type: SqlType<T2>): Expression<T2>
+        { return new Cast(this, type.name); }
     in(subquery: SingleTypeSubquery<T>): Expression<boolean>;
     in(...values: Expression<T>[]): Expression<boolean>;
     in(arg1?: SingleTypeSubquery<T> | Expression<T>, ...rest: Expression<T>[]): Expression<boolean> {

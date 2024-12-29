@@ -18,34 +18,36 @@ export function tagUuid(hex: string): Uuid {
 // Embed SQL types into TS
 interface NullableType<T> {
     [__brand]?: T | null;
-    notNull: () => Type<T>;
+    notNull: () => SqlType<T>;
+    name: string;
 }
 
-interface Type<T> {
+export interface SqlType<T> {
     [__brand]?: T; // Needed to make typescript actually check that Expression types line up
+    name: string;
 }
 
-const makeType = <T>(): NullableType<T> => ({notNull: () => ({})});
+const makeType = <T>(name: string): NullableType<T> => ({name, notNull: () => ({name})});
 
-export const text = makeType<string>();
-export const number = makeType<number>();
-export const boolean = makeType<boolean>();
-export const bytea = makeType<Buffer>();
-export const timestampWithTimeZone = makeType<Date>();
-export const uuid = makeType<Uuid>();
-export const json = makeType<Json>();
-export const jsonb = makeType<Jsonb>();
-export const xml = makeType<Xml>();
+export const text = makeType<string>('text');
+export const number = makeType<number>('number');
+export const boolean = makeType<boolean>('boolean');
+export const bytea = makeType<Buffer>('bytea');
+export const timestampWithTimeZone = makeType<Date>('timestamp with time zone');
+export const uuid = makeType<Uuid>('uuid');
+export const json = makeType<Json>('json');
+export const jsonb = makeType<Jsonb>('jsonb');
+export const xml = makeType<Xml>('xml');
 
-export const enumType = <E extends string>(..._options: E[]): NullableType<Enum<E>> => makeType();
-export const arrayType = <T>(_child: Type<T>): NullableType<T[]> => makeType();
-export const rangeType = <T>(_child: Type<T>): NullableType<Range<T>> => makeType();
-export const multiRangeType = <T>(_child: Type<T>): NullableType<MultiRange<T>> => makeType();
+export const enumType = <E extends string>(name: string, ..._opts: E[]): NullableType<Enum<E>> => makeType(name);
+export const arrayType = <T>(child: SqlType<T>): NullableType<T[]> => makeType(child.name + '[]');
+export const rangeType = <T>(name: string, _child: SqlType<T>): NullableType<Range<T>> => makeType(name);
+export const multiRangeType = <T>(name: string, _child: SqlType<T>): NullableType<MultiRange<T>> => makeType(name);
 
 // Convert TS type to SQL
 export type SQL<T>
-    = T extends string | number | boolean | Buffer | Date | Uuid | null ? Type<T>
+    = T extends string | number | boolean | Buffer | Date | Uuid | null ? SqlType<T>
     : T extends undefined ? never
-    : T extends (infer Child)[] ? Type<SQL<Child>[]>
-    : T extends object ? Type<{[K in keyof T]: SQL<T[K]>}>
+    : T extends (infer Child)[] ? SqlType<SQL<Child>[]>
+    : T extends object ? SqlType<{[K in keyof T]: SQL<T[K]>}>
     : never;
