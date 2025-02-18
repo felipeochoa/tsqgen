@@ -99,7 +99,8 @@ abstract class BaseExpr<T> implements Expression<T> {
     ilike(this: Expression<T & string>, other: Expression<string>): Expression<boolean>
         { return new InfixExpr(this, 'ILIKE', other); }
     collate(this: Expression<T & string>, collation: string): Expression<string>
-        { return new InfixExpr(this, 'COLLATE', new Identifier(collation)); }
+        { return new InfixExpr(this, 'COLLATE', new CollationIdentifier(collation)); }
+
     castAs<T2>(type: SqlType<T2>): Expression<T2>
         { return new Cast(this, type.name); }
     in(subquery: SingleTypeSubquery<T>): Expression<boolean>;
@@ -196,13 +197,13 @@ export const constant = <T extends string | number | boolean | null>(value: Stat
 
 export const number = (value: number): Expression<number> => new Constant(value);
 
-class Identifier<T> extends BaseExpr<T> {
+class CollationIdentifier extends BaseExpr<string> {
     constructor(private name: string) {
         super();
     }
 
     serialize(): Token[] {
-        return [identifier(this.name)];
+        return [identifier(this.name, true)];
     }
 }
 

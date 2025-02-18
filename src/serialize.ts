@@ -1,6 +1,22 @@
 import * as quote from './quote';
 import { assertNever } from './utils';
 
+function needsQuoting(identifier: string): boolean {
+    return !/^[a-zA-Z_][a-zA-Z0-9_$]*$/.test(identifier)
+        || isReservedKeyword(identifier.toUpperCase());
+}
+
+function isReservedKeyword(identifier: string): boolean {
+    const keywords = new Set([
+        'ABSENT', 'ALL', 'AND', 'ANY', 'ARRAY', 'AS', 'ASC', 'BETWEEN', 'CAST',
+        'CROSS', 'JOIN', 'CUBE', 'DESC', 'DISTINCT', 'EXCEPT', 'FILTER', 'FOR',
+        'FROM', 'FULL', 'GROUP', 'BY', 'HAVING', 'INNER', 'INTERSECT', 'JOIN',
+        'LATERAL', 'LEFT', 'LIMIT', 'NULL', 'OFFSET', 'ON', 'ORDER', 'OVER',
+        'RIGHT', 'SELECT', 'UNION', 'UNIQUE', 'UPDATE', 'USING', 'WHERE', 'WITH',
+    ]);
+    return keywords.has(identifier);
+}
+
 // https://www.postgresql.org/docs/current/sql-syntax-lexical.html
 
 export interface Serializable {
@@ -29,7 +45,10 @@ function unlex1(token: Token) {
         case 'KeyWord':
             return token.value;
         case 'Identifier':
-            return quote.identifier(token.value);
+            if (token.forceQuote) return quote.identifier(token.value);
+            return needsQuoting(token.value)
+                ? quote.identifier(token.value)
+                : token.value;
         case 'Literal': {
             const value = token.value;
             if (typeof value === 'string') {
@@ -61,14 +80,15 @@ export function commaSeparate(args: readonly Token[][]): Token[] {
 
 export type Token =
     | {type: 'KeyWord'; value: KeyWord}
-    | {type: 'Identifier'; value: string}
+    | {type: 'Identifier'; value: string; forceQuote: boolean}
     | {type: 'Literal'; value: string | number | boolean | null}
     | {type: 'Operator'; value: string}
     | {type: 'SpecialCharacter'; value: SpecialCharacter}
     | {type: 'ColumnReference'; tableName: string; columnName: string};
 
 export const keyWord = (value: KeyWord): Token => ({type: 'KeyWord', value});
-export const identifier = (value: string): Token => ({type: 'Identifier', value});
+export const identifier = (value: string, forceQuote?: boolean): Token =>
+    ({type: 'Identifier', value, forceQuote: forceQuote ?? false});
 export const literal = (value: string | number | boolean | null): Token => ({type: 'Literal', value});
 export const operator = (value: string): Token => ({type: 'Operator', value});
 export const specialCharacter = (value: SpecialCharacter): Token => ({type: 'SpecialCharacter', value});

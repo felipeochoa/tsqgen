@@ -400,7 +400,7 @@ class SubqueryImpl<FromTuple, SelectTuple> {
         parts.push(...this.serializeLimits());
         for (const {strength, block, tables} of this.state.locks) {
             parts.push(keyWord('FOR'), keyWord(strength));
-            if (tables !== undefined) parts.push(keyWord('OF'), ...tables.map(identifier));
+            if (tables !== undefined) parts.push(keyWord('OF'), ...tables.map(t => identifier(t)));
             if (block !== undefined) parts.push(keyWord(block));
         }
         return parts;

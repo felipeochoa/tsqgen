@@ -62,26 +62,32 @@ describe('unlex', () => {
         ];
         expect(unlex(tokens)).toBe('SELECT column FROM table');
     });
+
+    test('dangerous identifier tokens are escaped', () => {
+        const dangerousIdentifier = 'DROP "TABLE" users;--';
+        const token = identifier(dangerousIdentifier);
+        expect(unlex([token])).toBe('"DROP ""TABLE"" users;--"');
+    });
 });
 
 describe('commaSeparate', () => {
     test('Single Token Array', () => {
-        const tokens: Token[][] = [[{type: 'Identifier', value: 'column1'}]];
-        expect(commaSeparate(tokens)).toEqual([{type: 'Identifier', value: 'column1'}]);
+        const tokens: Token[][] = [[identifier('column1')]];
+        expect(commaSeparate(tokens)).toEqual([identifier('column1')]);
     });
 
     test('Multiple Token Arrays', () => {
         const tokens: Token[][] = [
-            [{type: 'Identifier', value: 'column1'}],
-            [{type: 'Identifier', value: 'column2'}],
-            [{type: 'Identifier', value: 'column3'}],
+            [identifier('column1')],
+            [identifier('column2')],
+            [identifier('column3')],
         ];
         expect(commaSeparate(tokens)).toEqual([
-            {type: 'Identifier', value: 'column1'},
+            identifier('column1'),
             {type: 'SpecialCharacter', value: ','},
-            {type: 'Identifier', value: 'column2'},
+            identifier('column2'),
             {type: 'SpecialCharacter', value: ','},
-            {type: 'Identifier', value: 'column3'},
+            identifier('column3'),
         ]);
     });
 
