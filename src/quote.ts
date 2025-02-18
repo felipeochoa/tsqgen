@@ -1,7 +1,22 @@
 // Escape syntax is documented here: https://www.postgresql.org/docs/current/sql-syntax-lexical.html
 
-export function identifier(ident: string) {
-    if (/^[a-z]+$/.test(ident)) return ident;
+const reservedKeywords = new Set([
+    'ABSENT', 'ALL', 'AND', 'ANY', 'ARRAY', 'AS', 'ASC', 'BETWEEN', 'CAST',
+    'CROSS', 'JOIN', 'CUBE', 'DESC', 'DISTINCT', 'EXCEPT', 'FILTER', 'FOR',
+    'FROM', 'FULL', 'GROUP', 'BY', 'HAVING', 'INNER', 'INTERSECT',
+    'LATERAL', 'LEFT', 'LIMIT', 'NULL', 'OFFSET', 'ON', 'ORDER', 'OVER',
+    'RIGHT', 'SELECT', 'UNION', 'UNIQUE', 'UPDATE', 'USING', 'WHERE', 'WITH',
+]);
+
+export function identifier(ident: string, forceQuote: boolean = false) {
+    if (forceQuote) return `"${ident.replace(/"/g, '""')}"`;
+
+    if (reservedKeywords.has(ident.toUpperCase())) {
+        return `"${ident.replace(/"/g, '""')}"`;
+    }
+
+    if (/^[a-z_][a-z0-9_]*$/.test(ident)) return ident;
+
     return `"${ident.replace(/"/g, '""')}"`;
 }
 

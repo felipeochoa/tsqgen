@@ -1,22 +1,6 @@
 import * as quote from './quote';
 import { assertNever } from './utils';
 
-function needsQuoting(identifier: string): boolean {
-    return !/^[a-zA-Z_][a-zA-Z0-9_$]*$/.test(identifier)
-        || isReservedKeyword(identifier.toUpperCase());
-}
-
-function isReservedKeyword(identifier: string): boolean {
-    const keywords = new Set([
-        'ABSENT', 'ALL', 'AND', 'ANY', 'ARRAY', 'AS', 'ASC', 'BETWEEN', 'CAST',
-        'CROSS', 'JOIN', 'CUBE', 'DESC', 'DISTINCT', 'EXCEPT', 'FILTER', 'FOR',
-        'FROM', 'FULL', 'GROUP', 'BY', 'HAVING', 'INNER', 'INTERSECT', 'JOIN',
-        'LATERAL', 'LEFT', 'LIMIT', 'NULL', 'OFFSET', 'ON', 'ORDER', 'OVER',
-        'RIGHT', 'SELECT', 'UNION', 'UNIQUE', 'UPDATE', 'USING', 'WHERE', 'WITH',
-    ]);
-    return keywords.has(identifier);
-}
-
 // https://www.postgresql.org/docs/current/sql-syntax-lexical.html
 
 export interface Serializable {
@@ -45,10 +29,7 @@ function unlex1(token: Token) {
         case 'KeyWord':
             return token.value;
         case 'Identifier':
-            if (token.forceQuote) return quote.identifier(token.value);
-            return needsQuoting(token.value)
-                ? quote.identifier(token.value)
-                : token.value;
+            return quote.identifier(token.value, token.forceQuote);
         case 'Literal': {
             const value = token.value;
             if (typeof value === 'string') {
@@ -64,8 +45,11 @@ function unlex1(token: Token) {
             return quote.operator(token.value);
         case 'SpecialCharacter':
             return token.value;
-        case 'ColumnReference':
-            return `${quote.identifier(token.tableName)}.${quote.identifier(token.columnName)}`;
+        case 'ColumnReference': {
+            const table = quote.identifier(token.tableName);
+            const column = quote.identifier(token.columnName);
+            return `${table}.${column}`;
+        }
     }
 }
 
