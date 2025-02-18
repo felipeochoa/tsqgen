@@ -23,7 +23,7 @@ export function identifier(ident: string, forceQuote: boolean = false) {
 export const string = (lit: string) => `'${lit.replace(/'/g, "''")}'`;
 
 export function operator(op: string) {
-    if (validOperators.has(op)) return op;
+    if (validOperators.has(op.toUpperCase())) return op;
     if (!/[+\-*/<>=~!@#%^&|`?]/.test(op) || /--|\/\*/.test(op))
         throw new Error('Invalid operator: ' + op);
     return op;
