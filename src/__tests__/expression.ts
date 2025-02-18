@@ -130,41 +130,51 @@ describe('BaseExpr', () => {
     it.todo('.using()');
 });
 
-    it('serializes constant values correctly', () => {
-        expectStringifyToBe(constant('hello'), "'hello'");
-        expectStringifyToBe(constant(123), "123");
-        expectStringifyToBe(constant(false), "false");
-    });
+it('serializes constant values correctly', () => {
+    expectStringifyToBe(constant('hello'), "'hello'");
+    expectStringifyToBe(constant(123), "123");
+    expectStringifyToBe(constant(false), "false");
+});
 
-    it('serializes identifier expressions correctly', () => {
-        const expr = field('users', 'name');
-        expectStringifyToBe(expr, "users.name");
-    });
+it('serializes identifier expressions correctly', () => {
+    const expr = field('users', 'name');
+    expectStringifyToBe(expr, "users.name");
+});
 
-    it('serializes prefix expressions correctly', () => {
-        const expr = not(constant(true));
-        expectStringifyToBe(expr, "(not true)");
-    });
+it('serializes prefix expressions correctly', () => {
+    const expr = not(constant(true));
+    expectStringifyToBe(expr, "(not true)");
+});
 
-    it('serializes postfix expressions correctly', () => {
-        const expr = constant('postfix').isNotNull();
-        expectStringifyToBe(expr, "('postfix' IS NOT NULL)");
-    });
+it('serializes postfix expressions correctly', () => {
+    const expr = constant('postfix').isNotNull();
+    expectStringifyToBe(expr, "('postfix' IS NOT NULL)");
+});
 
-    it('serializes infix expressions correctly', () => {
-        const expr = constant(1).eq(constant(1));
-        expectStringifyToBe(expr, "(1 = 1)");
-    });
+it('serializes infix expressions correctly', () => {
+    const expr = constant(1).eq(constant(1));
+    expectStringifyToBe(expr, "(1 = 1)");
+});
 
-    it('serializes multi-operand expressions correctly', () => {
-        const expr = constant(1).in(constant(1), constant(2), constant(3));
-        expectStringifyToBe(expr, "(1 IN (1, 2, 3))");
-    });
+it('serializes multi-operand expressions correctly', () => {
+    const expr = constant(1).in(constant(1), constant(2), constant(3));
+    expectStringifyToBe(expr, "(1 IN (1, 2, 3))");
+});
 
-    it('serializes function expressions correctly', () => {
-        const expr = func('MY_FUNC', [constant(1), constant('two')]);
-        expectStringifyToBe(expr, "MY_FUNC(1, 'two')");
-    });
+it('serializes function expressions correctly', () => {
+    const expr = func('MY_FUNC', [constant(1), constant('two')]);
+    expectStringifyToBe(expr, "MY_FUNC(1, 'two')");
+});
+
+it('serializes function expressions correctly with no arguments', () => {
+    const expr = func('MY_FUNC', []);
+    expectStringifyToBe(expr, "MY_FUNC()");
+});
+
+it('serializes function expressions correctly with one argument', () => {
+    const expr = func('MY_FUNC', [constant(1)]);
+    expectStringifyToBe(expr, "MY_FUNC(1)");
+});
 
 // ### Aggregate Tests
 // - should serialize aggregate functions correctly

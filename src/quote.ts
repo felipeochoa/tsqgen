@@ -15,7 +15,7 @@ export function identifier(ident: string, forceQuote: boolean = false) {
         return `"${ident.replace(/"/g, '""')}"`;
     }
 
-    if (/^[a-z_][a-z0-9_]*$/.test(ident)) return ident;
+    if (/^[A-Za-z_][A-Za-z0-9_]*$/.test(ident)) return ident;
 
     return `"${ident.replace(/"/g, '""')}"`;
 }
