@@ -293,7 +293,7 @@ class FuncExpr<T> extends BaseExpr<T> {
     }
 }
 
-export const func = <T>(name: string, args: Expression<unknown>[]): Expression<T> => new FuncExpr(name, args);
+export const func = <T>(name: string, args: FinalExpression<unknown>[]): Expression<T> => new FuncExpr(name, args);
 
 export const not = (arg: Expression<boolean>): Expression<boolean> => new PrefixExpr('not', arg);
 

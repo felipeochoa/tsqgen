@@ -1,4 +1,4 @@
-import { array, constant } from '../expression';
+import { array, constant, field, func, not } from '../expression';
 import { Serializable, unlex } from '../serialize';
 import { boolean } from '../types';
 
@@ -130,26 +130,41 @@ describe('BaseExpr', () => {
     it.todo('.using()');
 });
 
-// ### Constant Tests
-// - should serialize constant values correctly
+    it('serializes constant values correctly', () => {
+        expectStringifyToBe(constant('hello'), "'hello'");
+        expectStringifyToBe(constant(123), "123");
+        expectStringifyToBe(constant(false), "false");
+    });
 
-// ### Identifier Tests
-// - should serialize identifiers correctly
+    it('serializes identifier expressions correctly', () => {
+        const expr = field('users', 'name');
+        expectStringifyToBe(expr, "users.name");
+    });
 
-// ### PrefixExpr Tests
-// - should serialize prefix expressions correctly
+    it('serializes prefix expressions correctly', () => {
+        const expr = not(constant(true));
+        expectStringifyToBe(expr, "(not true)");
+    });
 
-// ### PostfixExpr Tests
-// - should serialize postfix expressions correctly
+    it('serializes postfix expressions correctly', () => {
+        const expr = constant('postfix').isNotNull();
+        expectStringifyToBe(expr, "('postfix' IS NOT NULL)");
+    });
 
-// ### InfixExpr Tests
-// - should serialize infix expressions correctly
+    it('serializes infix expressions correctly', () => {
+        const expr = constant(1).eq(constant(1));
+        expectStringifyToBe(expr, "(1 = 1)");
+    });
 
-// ### MultiOperandExpr Tests
-// - should serialize multi-operand expressions correctly
+    it('serializes multi-operand expressions correctly', () => {
+        const expr = constant(1).in(constant(1), constant(2), constant(3));
+        expectStringifyToBe(expr, "(1 IN (1, 2, 3))");
+    });
 
-// ### FuncExpr Tests
-// - should serialize function expressions correctly
+    it('serializes function expressions correctly', () => {
+        const expr = func('MY_FUNC', [constant(1), constant('two')]);
+        expectStringifyToBe(expr, "MY_FUNC(1, 'two')");
+    });
 
 // ### Aggregate Tests
 // - should serialize aggregate functions correctly
