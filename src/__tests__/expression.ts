@@ -1,4 +1,5 @@
 import { array, constant, field, func, not } from '../expression';
+import { JsonArrayAgg, JsonObjectAgg, PartialWindowCall, agg } from '../expression';
 import { Serializable, unlex } from '../serialize';
 import { boolean } from '../types';
 
@@ -176,30 +177,79 @@ it('serializes function expressions correctly with one argument', () => {
     expectStringifyToBe(expr, "MY_FUNC(1)");
 });
 
-// ### Aggregate Tests
-// - should serialize aggregate functions correctly
-// - should handle distinct aggregates
-// - should handle order by in aggregates
-// - should handle filter in aggregates
+it('serializes aggregate functions correctly', () => {
+    const expr = agg<number>('SUM', [field('users', 'age')]);
+    expectStringifyToBe(expr, "SUM(users.age)");
+});
 
-// ### JsonObjectAgg Tests
-// - should serialize JSON object aggregates correctly
-// - should handle absent on null option
-// - should handle null on null option
-// - should handle unique keys option
+it('handles distinct aggregates', () => {
+    const expr = agg<number>('SUM', [field('users', 'income')]).distinct();
+    expectStringifyToBe(expr, "SUM(DISTINCT users.income)");
+});
 
-// ### JsonArrayAgg Tests
-// - should serialize JSON array aggregates correctly
-// - should handle order by in JSON array aggregates
-// - should handle absent on null option
-// - should handle null on null option
+it('handles order by in aggregates (ordered-set aggregate)', () => {
+    const expr = agg<number>('PERCENTILE_CONT', [field('users', 'score')], 'WITHIN GROUP', [field('users', 'score').asc()]);
+    expectStringifyToBe(expr, "PERCENTILE_CONT(users.score) WITHIN GROUP (users.score ASC)");
+});
 
-// ### OrderedSetAggregate Tests
-// - should serialize ordered set aggregates correctly
-// - should handle filter in ordered set aggregates
+it('handles filter in aggregates', () => {
+    const expr = agg<number>('COUNT', [field('users', 'id')])
+        .filterWhere(field<boolean>('users', 'active').eq(constant(true)));
+    expectStringifyToBe(expr, "COUNT(users.id) FILTER (WHERE (users.active = true))");
+});
 
-// ### WindowCall Tests
-// - should serialize window function calls correctly
+it('serializes JSON object aggregates correctly', () => {
+    const expr = new JsonObjectAgg(field('users', 'name'), field('users', 'id'));
+    expectStringifyToBe(expr, "json_object_agg(users.name: users.id)");
+});
+
+it('handles absent on null option for JSON object aggregates', () => {
+    const expr = new JsonObjectAgg(field('users', 'name'), field('users', 'id')).absentOnNull();
+    expectStringifyToBe(expr, "json_object_agg(users.name: users.id ABSENT ON NULL)");
+});
+
+it('handles null on null option for JSON object aggregates', () => {
+    const expr = new JsonObjectAgg(field('users', 'name'), field('users', 'id')).nullOnNull();
+    expectStringifyToBe(expr, "json_object_agg(users.name: users.id NULL ON NULL)");
+});
+
+it('handles unique keys option for JSON object aggregates', () => {
+    const expr = new JsonObjectAgg(field('users', 'name'), field('users', 'id')).withUniqueKeys();
+    expectStringifyToBe(expr, "json_object_agg(users.name: users.id WITH UNIQUE KEYS)");
+});
+
+it('serializes JSON array aggregates correctly', () => {
+    const expr = new JsonArrayAgg(field('users', 'id'));
+    expectStringifyToBe(expr, "json_array_agg(users.id)");
+});
+
+it('handles order by in JSON array aggregates', () => {
+    const expr = new JsonArrayAgg(field('users', 'id')).orderBy([field('users', 'name').desc()]);
+    expectStringifyToBe(expr, "json_array_agg(users.id ORDER BY users.name DESC)");
+});
+
+it('handles absent on null option for JSON array aggregates', () => {
+    const expr = new JsonArrayAgg(field('users', 'id')).absentOnNull();
+    expectStringifyToBe(expr, "json_array_agg(users.id ABSENT ON NULL)");
+});
+
+it('handles null on null option for JSON array aggregates', () => {
+    const expr = new JsonArrayAgg(field('users', 'id')).nullOnNull();
+    expectStringifyToBe(expr, "json_array_agg(users.id NULL ON NULL)");
+});
+
+it('handles filter in ordered set aggregates', () => {
+    const expr = agg('PERCENTILE_CONT', [field('users', 'score')], 'WITHIN GROUP', [field('users', 'score').asc()])
+        .filterWhere(field<boolean>('users', 'active').eq(constant(true)));
+    expectStringifyToBe(expr,
+                        "PERCENTILE_CONT(users.score) WITHIN GROUP (users.score ASC) FILTER (WHERE (users.active = true))");
+});
+
+it('serializes window function calls correctly', () => {
+    const partial = new PartialWindowCall<number>('ROW_NUMBER', []);
+    const expr = partial.over('win_alias');
+    expectStringifyToBe(expr, "ROW_NUMBER(*) OVER win_alias");
+});
 
 // ### PartialWindowCall Tests
 // - should handle filter in partial window calls

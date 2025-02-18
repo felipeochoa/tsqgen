@@ -15,7 +15,7 @@ export function unlex(tokens: Token[]): string {
         const needsSpaceAfter = nextToken && !(
             (token.type === 'SpecialCharacter' && (token.value === '(' || token.value === '['))
             || (token.type === 'SpecialCharacter' && token.value === '.')
-            || (nextToken.type === 'SpecialCharacter' && nextToken.value === '.')
+            || (nextToken.type === 'SpecialCharacter' && (nextToken.value === '.' || nextToken.value === ':'))
             || (token.type === 'Identifier' && nextToken.type === 'SpecialCharacter' && nextToken.value === '(')
             || (token.type === 'KeyWord' && ['CAST', 'ARRAY', 'ANY', 'ALL'].includes(token.value))
             || (nextToken.type === 'SpecialCharacter' && (nextToken.value === ')' || nextToken.value === ']'))

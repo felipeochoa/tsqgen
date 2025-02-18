@@ -419,17 +419,14 @@ export class JsonArrayAgg<T> extends BaseExpr<Json> {
     }
 
     serialize(): Token[] {
-        // https://www.postgresql.org/docs/current/functions-aggregate.html#id-1.5.8.27.6.2.4.15.1.1.1
-        const orderBy = this.orderByClause ? serializeOrderBy(this.orderByClause) : [];
         const onNull = this.onNullOption ? [keyWord(this.onNullOption), keyWord('ON'), keyWord('NULL')] : [];
         return [
             identifier('json_array_agg'),
             specialCharacter('('),
             ...this.value.serialize(),
-            ...orderBy,
+            ...(this.orderByClause ? [keyWord('ORDER BY'), ...serializeOrderBy(this.orderByClause)] : []),
             ...onNull,
             specialCharacter(')'),
-            // TODO: RETURNING
         ];
     }
 }
